@@ -35,6 +35,8 @@ pub(crate) struct SingleComponent {
     pub(crate) metric: crate::DataCell,
 }
 
+impl fjall_rrd::hooks::data::Host for SingleComponent {}
+
 impl SingleImports for SingleComponent {
     /// Get the name of the current timeseries partition
     /// this hook is running for.

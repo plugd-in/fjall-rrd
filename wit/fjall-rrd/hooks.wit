@@ -1,6 +1,6 @@
 package fjall-rrd:hooks;
 
-world single {
+interface data {
     /// The type stored in the underlying engine.
     variant data-cell {
         /// Unsigned 64-bit ('eight' bytes) data.
@@ -19,6 +19,10 @@ world single {
         /// There's no data in this cell.
         empty,
     }
+}
+
+world single {
+    use data.{data-cell};
 
     /// Look back at the previous `how-far`
     /// numbers of items.
@@ -47,24 +51,7 @@ world single {
 }
 
 world tiered {
-    /// The type stored in the underlying engine.
-    variant data-cell {
-        /// Unsigned 64-bit ('eight' bytes) data.
-        unsigned-eight(u64),
-        /// Percentage data.
-        ///
-        /// This is clamped to 0-100 when stored.
-        percent(u8),
-        /// Sometimes storing some text state over
-        /// time is useful.
-        text(string),
-        /// Arbitrary data. For example, you can
-        /// serialize json into this if that's your
-        /// cup of tea.
-        custom(list<u8>),
-        /// There's no data in this cell.
-        empty,
-    }
+    use data.{data-cell};
 
     /// Look back at the previous `how-far` numbers
     /// of items in the current tier.

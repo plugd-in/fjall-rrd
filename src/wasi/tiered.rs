@@ -34,6 +34,8 @@ pub(crate) struct TieredComponent {
     pub(crate) metric: crate::DataCell,
 }
 
+impl fjall_rrd::hooks::data::Host for TieredComponent {}
+
 impl TieredImports for TieredComponent {
     /// Look back at the previous `how-far` numbers
     /// of items in the current tier.
