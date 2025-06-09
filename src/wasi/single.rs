@@ -38,6 +38,20 @@ pub(crate) struct SingleComponent {
 impl fjall_rrd::hooks::data::Host for SingleComponent {}
 
 impl SingleImports for SingleComponent {
+    /// Get the interval.
+    ///
+    /// *Note:* This should never return zero.
+    fn interval(&mut self) -> u16 {
+        self.metadata.interval.get()
+    }
+
+    /// Get the width of the round-robin structure.
+    ///
+    /// *Note:* This should never return zero.
+    fn width(&mut self) -> u16 {
+        self.metadata.width.get()
+    }
+
     /// Get the name of the current timeseries partition
     /// this hook is running for.
     fn partition_name(&mut self) -> String {

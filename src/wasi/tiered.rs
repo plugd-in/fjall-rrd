@@ -37,6 +37,30 @@ pub(crate) struct TieredComponent {
 impl fjall_rrd::hooks::data::Host for TieredComponent {}
 
 impl TieredImports for TieredComponent {
+    fn current_interval(&mut self) -> u16 {
+        let Some(current_tier) = self.nth_tier else {
+            return 0;
+        };
+
+        let Some(current_tier) = self.tiers.get(usize::from(current_tier)) else {
+            return 0;
+        };
+
+        current_tier.interval.get()
+    }
+
+    fn current_width(&mut self) -> u16 {
+        let Some(current_tier) = self.nth_tier else {
+            return 0;
+        };
+
+        let Some(current_tier) = self.tiers.get(usize::from(current_tier)) else {
+            return 0;
+        };
+
+        current_tier.width.get()
+    }
+
     /// Look back at the previous `how-far` numbers
     /// of items in the current tier.
     fn look_back_current(&mut self, how_far: u16) -> Vec<DataCell> {

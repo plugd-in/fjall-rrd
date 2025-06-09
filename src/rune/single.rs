@@ -218,6 +218,11 @@ impl SingleRuneContext {
     }
 
     #[function]
+    fn interval(&mut self) -> u16 {
+        self.metadata.interval.get()
+    }
+
+    #[function]
     fn write_custom(&mut self, data: DataCell) {
         self.data.custom_data = data;
         self.data.dirty = true;
@@ -368,6 +373,8 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(SingleRuneContext::metric)?;
     module.function_meta(SingleRuneContext::write_custom)?;
     module.function_meta(SingleRuneContext::get_custom)?;
+    module.function_meta(SingleRuneContext::width__meta)?;
+    module.function_meta(SingleRuneContext::interval)?;
     module.function_meta(DataCell::custom)?;
 
     Ok(module)

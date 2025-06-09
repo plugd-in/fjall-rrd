@@ -24,6 +24,14 @@ interface data {
 world single {
     use data.{data-cell};
 
+    /// Get the interval.
+    ///
+    /// *Note:* This should never return zero.
+    import interval: func() -> u16;
+    /// Get the width of the round-robin structure.
+    ///
+    /// *Note:* This should never return zero.
+    import width: func() -> u16;
     /// Look back at the previous `how-far`
     /// numbers of items.
     import look-back: func(how-far: u16) -> list<data-cell>;
@@ -69,6 +77,16 @@ world single {
 world tiered {
     use data.{data-cell};
 
+    /// Get the interval of the current tier.
+    ///
+    /// *Note:* 0 is not a valid interval, and
+    /// is returned when there is no current tier.
+    import current-interval: func() -> u16;
+    /// Get the width of the current tier.
+    ///
+    /// *Note:* 0 is not a valid width, and
+    /// is returned when there is no current tier.
+    import current-width: func() -> u16;
     /// Look back at the previous `how-far` numbers
     /// of items in the current tier.
     import look-back-current: func(how-far: u16) -> list<data-cell>;

@@ -270,6 +270,24 @@ impl TieredRuneContext {
         }
     }
 
+    #[function]
+    fn current_width(&self) -> u16 {
+        if let Some(current_tier) = self.inner_current_tier() {
+            current_tier.width.get()
+        } else {
+            0
+        }
+    }
+
+    #[function]
+    fn current_interval(&self) -> u16 {
+        if let Some(current_tier) = self.inner_current_tier() {
+            current_tier.interval.get()
+        } else {
+            0
+        }
+    }
+
     fn total_interval(&self, tier: &TieredData) -> NonZeroU32 {
         if self.cumulative_interval == 0 {
             NonZeroU32::from(tier.interval)
@@ -418,6 +436,8 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(TieredRuneContext::get_custom_current)?;
     module.function_meta(TieredRuneContext::metric)?;
     module.function_meta(TieredRuneContext::empty)?;
+    module.function_meta(TieredRuneContext::current_width)?;
+    module.function_meta(TieredRuneContext::current_interval)?;
     module.function_meta(DataCell::custom)?;
 
     Ok(module)
