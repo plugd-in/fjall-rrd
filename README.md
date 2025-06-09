@@ -27,7 +27,7 @@ Currently, the Rune integration is undocumented.
 This project is a work-in-progress. The interface needs some work and there's
 some logic missing.
 
-* [ ] Finish implementing a complete WebAssembly interface.
+* [X] Finish implementing a complete WebAssembly interface.
 * [ ] Finish implementing a complete Rune interface.
 * [ ] Implement logic to create backups of timeseries data.
 * [ ] Implement logic to ensure a stable data format,

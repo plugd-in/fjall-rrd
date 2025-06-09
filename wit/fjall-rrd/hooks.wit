@@ -41,6 +41,8 @@ world single {
     /// Write the given metric into the Round-robin
     /// structure at the cell for the current bucket.
     import write-metric: func(metric: data-cell);
+    /// Get the metric being inserted.
+    import metric: func() -> data-cell;
 
     /// The main entry called for this hook.
     ///

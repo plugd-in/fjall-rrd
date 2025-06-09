@@ -44,6 +44,11 @@ impl SingleImports for SingleComponent {
         self.partition_name.as_ref().to_string()
     }
 
+    /// Get the metric being inserted.
+    fn metric(&mut self) -> DataCell {
+        self.metric.clone().into()
+    }
+
     /// Get whether the storage is untouched and
     /// unvisited for the item.
     fn pristine(&mut self) -> bool {
