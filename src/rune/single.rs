@@ -194,6 +194,68 @@ impl SingleRuneContext {
     }
 
     #[function]
+    fn missed(&self) -> u16 {
+        if self.pristine() {
+            return 0;
+        }
+
+        let current_bucket = timestamp_bucket(self.timestamp, self.metadata.interval.into());
+        let previous_bucket =
+            timestamp_bucket(self.data.last_timestamp, self.metadata.interval.into());
+
+        u16::try_from((current_bucket - previous_bucket).clamp(0, self.width().into()))
+            .expect("Within u16, by clamp.")
+    }
+
+    #[function]
+    fn write_multi_metric(&mut self, back: u16, metric: DataCell) {
+        let mut back = back;
+
+        let idx = self
+            .data
+            .data
+            .cell_idx(self.timestamp, self.metadata.interval.into());
+
+        {
+            let before = self.data.data.get_mut(0..=usize::from(idx));
+
+            if let Some(before) = before {
+                for cell in before.into_iter().rev() {
+                    if !(back > 0) {
+                        break;
+                    }
+
+                    if crate::DataCell::Empty.ne(cell) {
+                        *cell = metric.clone();
+                    }
+
+                    back -= 1;
+                }
+            }
+        }
+
+        {
+            let after = self.data.data.get_mut(usize::from(idx)..);
+
+            if let Some(after) = after {
+                for cell in after.into_iter().skip(1).rev() {
+                    if !(back > 0) {
+                        break;
+                    }
+
+                    if crate::DataCell::Empty.ne(cell) {
+                        *cell = metric.clone();
+                    }
+
+                    back -= 1;
+                }
+            }
+        }
+
+        self.data.dirty = true;
+    }
+
+    #[function]
     fn metric(&self) -> DataCell {
         self.metric.clone()
     }
@@ -375,6 +437,7 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(SingleRuneContext::get_custom)?;
     module.function_meta(SingleRuneContext::width__meta)?;
     module.function_meta(SingleRuneContext::interval)?;
+    module.function_meta(SingleRuneContext::missed)?;
     module.function_meta(DataCell::custom)?;
 
     Ok(module)

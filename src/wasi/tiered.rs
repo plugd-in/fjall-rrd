@@ -7,7 +7,7 @@ use std::{
 use crate::{
     TimeseriesError,
     format::{KeyType, Metadata, SeriesData, TieredData, TieredKey, TieredWasmMetadata},
-    util::TimeCellMut,
+    util::{TimeCellMut, timestamp_bucket},
     wasi::WasiStateMaybeUninit,
 };
 
@@ -37,6 +37,54 @@ pub(crate) struct TieredComponent {
 impl fjall_rrd::hooks::data::Host for TieredComponent {}
 
 impl TieredImports for TieredComponent {
+    fn missed(&mut self) -> Option<u16> {
+        let Some(current_tier) = self.nth_tier else {
+            return None;
+        };
+
+        let Some(current_tier) = self.tiers.get(usize::from(current_tier)) else {
+            return None;
+        };
+
+        if current_tier.pristine() {
+            return Some(0);
+        }
+
+        let total_interval = if self.cumulative_interval == 0 {
+            NonZeroU32::from(current_tier.interval)
+        } else {
+            NonZeroU32::new(self.cumulative_interval * u32::from(current_tier.interval.get()))
+                .expect("at least zero, by math")
+        };
+
+        let current_bucket = timestamp_bucket(self.timestamp, total_interval);
+        let previous_bucket = timestamp_bucket(current_tier.last_timestamp, total_interval);
+
+        Some(
+            u16::try_from(
+                (current_bucket - previous_bucket).clamp(0, current_tier.width.get().into()),
+            )
+            .expect("Within u16, by clamp."),
+        )
+    }
+
+    fn write_multi_metric(&mut self, back: u16, metric: DataCell) {
+        let Some(current_tier) = self.nth_tier else {
+            return;
+        };
+
+        let Some(current_tier) = self.tiers.get_mut(usize::from(current_tier)) else {
+            return;
+        };
+
+        current_tier.write_multi_back(
+            self.timestamp,
+            self.cumulative_interval,
+            back,
+            metric.into(),
+        );
+    }
+
     fn current_interval(&mut self) -> u16 {
         let Some(current_tier) = self.nth_tier else {
             return 0;

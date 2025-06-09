@@ -19,7 +19,7 @@ use rune::{
 use crate::{
     DataCell, TimeseriesError,
     format::{KeyType, Metadata, SeriesData, TieredData, TieredKey, TieredRuneMetadata},
-    util::TimeCellMut,
+    util::{TimeCellMut, timestamp_bucket},
 };
 
 #[derive(Clone)]
@@ -250,6 +250,29 @@ impl TieredRuneContext {
     #[function]
     fn metric(&self) -> DataCell {
         self.metric.deref().clone()
+    }
+
+    #[function]
+    fn missed(&self) -> Option<u16> {
+        if let Some(current_tier) = self.inner_current_tier() {
+            if current_tier.pristine() {
+                return Some(0);
+            }
+
+            let total_interval = self.total_interval(&current_tier);
+
+            let current_bucket = timestamp_bucket(self.timestamp, total_interval);
+            let previous_bucket = timestamp_bucket(current_tier.last_timestamp, total_interval);
+
+            Some(
+                u16::try_from(
+                    (current_bucket - previous_bucket).clamp(0, current_tier.width.get().into()),
+                )
+                .expect("Within u16, by clamp."),
+            )
+        } else {
+            None
+        }
     }
 
     #[function]

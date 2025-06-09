@@ -46,6 +46,13 @@ world single {
     import clear-misses: func();
     /// Commit any changes to storage.
     import commit: func();
+    /// Write the given metric in the given number
+    /// of cells backwards from the current cell,
+    /// as well as the current cell.
+    ///
+    /// Writing back 0 means only writing the
+    /// current cell.
+    import write-multi-metric: func(back: u16, metric: data-cell);
     /// Write the given metric into the Round-robin
     /// structure at the cell for the current bucket.
     import write-metric: func(metric: data-cell);
@@ -65,6 +72,12 @@ world single {
     /// This can be useful for calculating and storing
     /// deltas, for example.
     import get-custom: func() -> data-cell;
+    /// Returns the "buckets" of interval that have
+    /// passed since the last insertion.
+    ///
+    /// Note, this is clamped between 0 and the width
+    /// of the Round-robin structure.
+    import missed: func() -> u16;
 
     /// The main entry called for this hook.
     ///
@@ -77,6 +90,13 @@ world single {
 world tiered {
     use data.{data-cell};
 
+    /// Returns the "buckets" of interval that have
+    /// passed since the last insertion for this tier,
+    /// or None if there's no current tier.
+    ///
+    /// Note, this is clamped between 0 and the width
+    /// of the current tier.
+    import missed: func() -> option<u16>;
     /// Get the interval of the current tier.
     ///
     /// *Note:* 0 is not a valid interval, and
@@ -137,6 +157,15 @@ world tiered {
     /// suitable for the current timestamp and cumulative
     /// interval. This is a no-op for items with no tiers.
     import write-metric: func(metric: data-cell);
+    /// Write the given metric in the given number
+    /// of cells backwards from the current cell,
+    /// as well as the current cell.
+    ///
+    /// Writing back 0 means only writing the
+    /// current cell.
+    ///
+    /// *Note:* This is a no-op when there's no tiers.
+    import write-multi-metric: func(back: u16, metric: data-cell);
     /// Get the metric being inserted.
     import metric: func() -> data-cell;
     /// Write custom data into the tier.

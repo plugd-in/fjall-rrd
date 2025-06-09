@@ -4,7 +4,7 @@ use std::num::{NonZeroU16, NonZeroU32};
 
 use bitcode::{deserialize, serialize};
 use fjall::Slice;
-use rune::{function, Any};
+use rune::{Any, function};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -238,6 +238,62 @@ impl TieredData {
         }
 
         cells.into_boxed_slice()
+    }
+
+    pub(crate) fn write_multi_back(
+        &mut self,
+        timestamp: i64,
+        cumulative_interval: u32,
+        back: u16,
+        metric: DataCell,
+    ) {
+        let mut back = back + 1;
+        let total_interval = if cumulative_interval == 0 {
+            NonZeroU32::from(self.interval)
+        } else {
+            NonZeroU32::new(cumulative_interval * u32::from(self.interval.get()))
+                .expect("at least zero, by math")
+        };
+
+        let idx = self.data.cell_idx(timestamp, total_interval);
+
+        {
+            let before = self.data.get_mut(0..=usize::from(idx));
+
+            if let Some(before) = before {
+                for cell in before.into_iter().rev() {
+                    if !(back > 0) {
+                        break;
+                    }
+
+                    if DataCell::Empty.ne(cell) {
+                        *cell = metric.clone();
+                    }
+
+                    back -= 1;
+                }
+            }
+        }
+
+        {
+            let after = self.data.get_mut(usize::from(idx)..);
+
+            if let Some(after) = after {
+                for cell in after.into_iter().skip(1).rev() {
+                    if !(back > 0) {
+                        break;
+                    }
+
+                    if DataCell::Empty.ne(cell) {
+                        *cell = metric.clone();
+                    }
+
+                    back -= 1;
+                }
+            }
+        }
+
+        self.dirty = true;
     }
 
     pub(crate) fn clear_misses(&mut self, timestamp: i64, cumulative_interval: u32) {

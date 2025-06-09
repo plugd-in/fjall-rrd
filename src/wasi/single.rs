@@ -38,6 +38,67 @@ pub(crate) struct SingleComponent {
 impl fjall_rrd::hooks::data::Host for SingleComponent {}
 
 impl SingleImports for SingleComponent {
+    fn missed(&mut self) -> u16 {
+        if self.pristine() {
+            return 0;
+        }
+
+        let current_bucket = timestamp_bucket(self.timestamp, self.metadata.interval.into());
+        let previous_bucket =
+            timestamp_bucket(self.data.last_timestamp, self.metadata.interval.into());
+
+        u16::try_from((current_bucket - previous_bucket).clamp(0, self.metadata.width.get().into()))
+            .expect("Within u16, by clamp.")
+    }
+
+    fn write_multi_metric(&mut self, back: u16, metric: DataCell) {
+        let mut back = back;
+        let metric = crate::DataCell::from(metric);
+
+        let idx = self
+            .data
+            .data
+            .cell_idx(self.timestamp, self.metadata.interval.into());
+
+        {
+            let before = self.data.data.get_mut(0..=usize::from(idx));
+
+            if let Some(before) = before {
+                for cell in before.into_iter().rev() {
+                    if !(back > 0) {
+                        break;
+                    }
+
+                    if crate::DataCell::Empty.ne(cell) {
+                        *cell = metric.clone();
+                    }
+
+                    back -= 1;
+                }
+            }
+        }
+
+        {
+            let after = self.data.data.get_mut(usize::from(idx)..);
+
+            if let Some(after) = after {
+                for cell in after.into_iter().skip(1).rev() {
+                    if !(back > 0) {
+                        break;
+                    }
+
+                    if crate::DataCell::Empty.ne(cell) {
+                        *cell = metric.clone();
+                    }
+
+                    back -= 1;
+                }
+            }
+        }
+
+        self.data.dirty = true;
+    }
+
     /// Get the interval.
     ///
     /// *Note:* This should never return zero.
