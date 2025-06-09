@@ -1,0 +1,129 @@
+package fjall-rrd:hooks;
+
+world single {
+    /// The type stored in the underlying engine.
+    variant data-cell {
+        /// Unsigned 64-bit ('eight' bytes) data.
+        unsigned-eight(u64),
+        /// Percentage data.
+        ///
+        /// This is clamped to 0-100 when stored.
+        percent(u8),
+        /// Sometimes storing some text state over
+        /// time is useful.
+        text(string),
+        /// Arbitrary data. For example, you can
+        /// serialize json into this if that's your
+        /// cup of tea.
+        custom(list<u8>),
+        /// There's no data in this cell.
+        empty,
+    }
+
+    /// Look back at the previous `how-far`
+    /// numbers of items.
+    import look-back: func(how-far: u16) -> list<data-cell>;
+    /// Get the name of the current timeseries
+    /// partition this hook is running for.
+    import partition-name: func() -> string;
+    /// Get whether the storage is untouched
+    /// and unvisited for the item.
+    import pristine: func() -> bool;
+    /// Clear past misses from the last
+    /// timestamp to now.
+    import clear-misses: func();
+    /// Commit any changes to storage.
+    import commit: func();
+    /// Write the given metric into the Round-robin
+    /// structure at the cell for the current bucket.
+    import write-metric: func(metric: data-cell);
+
+    /// The main entry called for this hook.
+    ///
+    /// *Note:* For security reasons the host implementation
+    /// limits the number of WASM instructions that will
+    /// execute when calling this hook.
+    export handle-single-metric: func();
+}
+
+world tiered {
+    /// The type stored in the underlying engine.
+    variant data-cell {
+        /// Unsigned 64-bit ('eight' bytes) data.
+        unsigned-eight(u64),
+        /// Percentage data.
+        ///
+        /// This is clamped to 0-100 when stored.
+        percent(u8),
+        /// Sometimes storing some text state over
+        /// time is useful.
+        text(string),
+        /// Arbitrary data. For example, you can
+        /// serialize json into this if that's your
+        /// cup of tea.
+        custom(list<u8>),
+        /// There's no data in this cell.
+        empty,
+    }
+
+    /// Look back at the previous `how-far` numbers
+    /// of items in the current tier.
+    import look-back-current: func(how-far: u16) -> list<data-cell>;
+    /// Look back at the previous `how-far` numbers
+    /// of items in the previous tier.
+    ///
+    /// *Note:* Always returns an empty collection for
+    /// the first (0th) tier.
+    import look-back-previous: func(how-far: u16) -> list<data-cell>;
+    /// Get the name of the current timeseries
+    /// partition this hook is running for.
+    import partition-name: func() -> string;
+    /// Clear past misses in the current tier.
+    import clear-misses: func();
+    /// Get whether there are no storage tiers
+    /// created for this item.
+    import empty: func() -> bool;
+    /// Get how many tiers there for the item.
+    import tier-count: func() -> u16;
+    /// Get the current tier being inserted into,
+    /// starting at 0. If there are no tiers,
+    /// then None is returned.
+    import current-tier: func() -> option<u16>;
+    /// Create a new tier.
+    ///
+    /// The width defines how many items will fit
+    /// in the RRD, and the interval specifies
+    /// the period between inserts, either in seconds
+    /// if it's the first tier or in terms of the number
+    /// of cells in the lower tier.
+    ///
+    /// *Note:* This does not commit the tier until
+    /// `commit-current` is called at the appropriate
+    /// time. Likewise, this does no change the current
+    /// tier to the created tier. You have to wait until
+    /// subsequent calls of the `handle-metric` hook
+    /// to modify and commit the created tier to storage.
+    ///
+    /// *Warn:* Width and interval *must* be non-zero or
+    /// this will silently fail.
+    import create-tier: func(width: u16, interval: u16);
+    /// Commit the current tier to storage.
+    ///
+    /// *Note:* The data is only committed if the current
+    /// data has been changed (e.g. through `write-metric`).
+    import commit-current: func();
+    /// Write a metric into the current tier in the cell
+    /// suitable for the current timestamp and cumulative
+    /// interval. This is a no-op for items with no tiers.
+    import write-metric: func(metric: data-cell);
+    /// Get the metric being inserted.
+    import metric: func() -> data-cell;
+
+
+    /// The main entry called for this hook.
+    ///
+    /// *Note:* For security reasons the host implementation
+    /// limits the number of WASM instructions that will
+    /// execute when calling this hook.
+    export handle-tiered-metric: func();
+}
