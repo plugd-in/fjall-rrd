@@ -52,7 +52,7 @@ impl SingleImports for SingleComponent {
     /// Get whether the storage is untouched and
     /// unvisited for the item.
     fn pristine(&mut self) -> bool {
-        self.data.last_timestamp == i64::MIN
+        self.data.last_timestamp == i64::MIN && self.data.dirty == false
     }
 
     /// Clear past misses from the last timestamp to now.
@@ -120,6 +120,8 @@ impl SingleImports for SingleComponent {
     /// Commit any changes to storage.
     fn commit(&mut self) -> () {
         if self.data.dirty {
+            self.data.last_timestamp = self.timestamp;
+
             if let Err(e) = self.partition.insert(
                 KeyType::Single(SingleKey {
                     inner_key: self.inner_key.clone(),
@@ -142,7 +144,6 @@ impl SingleImports for SingleComponent {
             .get_cell_mut(self.timestamp, self.metadata.interval.into());
 
         *current_cell = metric;
-        self.data.last_timestamp = self.timestamp;
         self.data.dirty = true;
     }
 
@@ -188,7 +189,6 @@ impl SingleImports for SingleComponent {
     fn write_custom(&mut self, data: DataCell) {
         let data = crate::DataCell::from(data);
 
-        self.data.last_timestamp = self.timestamp;
         self.data.custom_data = data;
         self.data.dirty = true;
     }

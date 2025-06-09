@@ -200,7 +200,7 @@ impl SingleRuneContext {
 
     #[function(keep)]
     fn pristine(&self) -> bool {
-        return self.data.last_timestamp == i64::MIN;
+        self.data.last_timestamp == i64::MIN && self.data.dirty == false
     }
 
     #[function]

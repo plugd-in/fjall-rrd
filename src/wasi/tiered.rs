@@ -162,11 +162,13 @@ impl TieredImports for TieredComponent {
             return;
         };
 
-        let Some(current_tier) = self.tiers.get(usize::from(nth_tier)) else {
+        let Some(current_tier) = self.tiers.get_mut(usize::from(nth_tier)) else {
             return;
         };
 
         if current_tier.dirty {
+            current_tier.last_timestamp = self.timestamp;
+
             if let Err(e) = self.partition.insert(
                 KeyType::Tier(TieredKey {
                     inner_key: self.inner_key.as_ref().into(),
@@ -205,7 +207,6 @@ impl TieredImports for TieredComponent {
             .get_cell_mut(self.timestamp, total_interval);
 
         *current_cell = metric;
-        current_tier.last_timestamp = self.timestamp;
         current_tier.dirty = true;
     }
 
@@ -231,7 +232,6 @@ impl TieredImports for TieredComponent {
 
         let data = crate::DataCell::from(data);
 
-        current_tier.last_timestamp = self.timestamp;
         current_tier.custom_data = data;
         current_tier.dirty = true;
     }
