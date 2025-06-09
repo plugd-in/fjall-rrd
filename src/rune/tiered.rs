@@ -252,6 +252,24 @@ impl TieredRuneContext {
         self.metric.deref().clone()
     }
 
+    #[function]
+    fn write_custom_current(&self, data: DataCell) {
+        if let Some(mut current_tier) = self.current_tier_mut() {
+            current_tier.custom_data = data;
+            current_tier.dirty = true;
+            current_tier.last_timestamp = self.timestamp;
+        }
+    }
+
+    #[function]
+    fn get_custom_current(&self) -> Option<DataCell> {
+        if let Some(current_tier) = self.inner_current_tier() {
+            Some(current_tier.custom_data.clone())
+        } else {
+            None
+        }
+    }
+
     fn total_interval(&self, tier: &TieredData) -> NonZeroU32 {
         if self.cumulative_interval == 0 {
             NonZeroU32::from(tier.interval)
@@ -269,10 +287,9 @@ impl TieredRuneContext {
                 .data
                 .get_cell_mut(self.timestamp(), total_interval);
 
-            if metric.ne(current_cell) {
-                *current_cell = metric;
-                current_tier.dirty = true;
-            }
+            *current_cell = metric;
+            current_tier.dirty = true;
+            current_tier.last_timestamp = self.timestamp;
         }
     }
 
@@ -397,6 +414,8 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(TieredRuneContext::create_tier)?;
     module.function_meta(TieredRuneContext::commit_current)?;
     module.function_meta(TieredRuneContext::write_metric)?;
+    module.function_meta(TieredRuneContext::write_custom_current)?;
+    module.function_meta(TieredRuneContext::get_custom_current)?;
     module.function_meta(TieredRuneContext::metric)?;
     module.function_meta(TieredRuneContext::empty)?;
     module.function_meta(DataCell::custom)?;

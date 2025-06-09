@@ -141,11 +141,9 @@ impl SingleImports for SingleComponent {
             .data
             .get_cell_mut(self.timestamp, self.metadata.interval.into());
 
-        if metric.ne(current_cell) {
-            *current_cell = metric;
-            self.data.last_timestamp = self.timestamp;
-            self.data.dirty = true;
-        }
+        *current_cell = metric;
+        self.data.last_timestamp = self.timestamp;
+        self.data.dirty = true;
     }
 
     /// Look back at the previous `how-far` numbers of items.
@@ -179,6 +177,30 @@ impl SingleImports for SingleComponent {
         }
 
         cells
+    }
+
+    /// Write custom data into the item.
+    ///
+    /// This differs from a metric and can be
+    /// used to store non-metric data across calls.
+    /// This can be useful for calculating and storing
+    /// deltas, for example.
+    fn write_custom(&mut self, data: DataCell) {
+        let data = crate::DataCell::from(data);
+
+        self.data.last_timestamp = self.timestamp;
+        self.data.custom_data = data;
+        self.data.dirty = true;
+    }
+
+    /// Get custom data for the item.
+    ///
+    /// This differs from a metric and can be
+    /// used to store non-metric data across calls.
+    /// This can be useful for calculating and storing
+    /// deltas, for example.
+    fn get_custom(&mut self) -> DataCell {
+        self.data.custom_data.clone().into()
     }
 }
 
@@ -375,7 +397,7 @@ impl SingleWasmPartition {
                 data
             } else {
                 let data = SingleData {
-                    custom_data: Box::new([]),
+                    custom_data: crate::DataCell::Empty,
                     data: vec![crate::DataCell::Empty; usize::from(width.get())].into_boxed_slice(),
                     last_timestamp: i64::MIN,
                     dirty: true,
@@ -385,7 +407,7 @@ impl SingleWasmPartition {
             }
         } else {
             let data = SingleData {
-                custom_data: Box::new([]),
+                custom_data: crate::DataCell::Empty,
                 data: vec![crate::DataCell::Empty; usize::from(width.get())].into_boxed_slice(),
                 last_timestamp: i64::MIN,
                 dirty: true,

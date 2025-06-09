@@ -43,6 +43,20 @@ world single {
     import write-metric: func(metric: data-cell);
     /// Get the metric being inserted.
     import metric: func() -> data-cell;
+    /// Write custom data into the item.
+    ///
+    /// This differs from a metric and can be
+    /// used to store non-metric data across calls.
+    /// This can be useful for calculating and storing
+    /// deltas, for example.
+    import write-custom: func(data: data-cell);
+    /// Get custom data for the item.
+    ///
+    /// This differs from a metric and can be
+    /// used to store non-metric data across calls.
+    /// This can be useful for calculating and storing
+    /// deltas, for example.
+    import get-custom: func() -> data-cell;
 
     /// The main entry called for this hook.
     ///
@@ -107,6 +121,24 @@ world tiered {
     import write-metric: func(metric: data-cell);
     /// Get the metric being inserted.
     import metric: func() -> data-cell;
+    /// Write custom data into the tier.
+    ///
+    /// If there are no tiers, then this is a no-op.
+    ///
+    /// This differs from a metric and can be
+    /// used to store non-metric data across calls.
+    /// This can be useful for calculating and storing
+    /// deltas, for example.
+    import write-custom-current: func(data: data-cell);
+    /// Get custom data for the item.
+    ///
+    /// If there are no tiers, then this returns None.
+    ///
+    /// This differs from a metric and can be
+    /// used to store non-metric data across calls.
+    /// This can be useful for calculating and storing
+    /// deltas, for example.
+    import get-custom-current: func() -> option<data-cell>;
 
 
     /// The main entry called for this hook.

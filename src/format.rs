@@ -149,14 +149,14 @@ impl From<Slice> for Metadata {
 #[derive(Any, Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub enum DataCell {
     #[rune(constructor)]
+    Empty,
+    #[rune(constructor)]
     U64(#[rune(get)] u64),
     #[rune(constructor)]
     Percent(#[rune(get)] u8),
     #[rune(constructor)]
     Text(#[rune(get)] String),
     Custom(Box<[u8]>),
-    #[rune(constructor)]
-    Empty,
 }
 
 impl DataCell {
@@ -168,12 +168,11 @@ impl DataCell {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct SingleData {
-    /// The timestamp of the last successful insertion
-    /// of data, excluding `custom_data`.
+    /// The timestamp of the last commit.
     pub(crate) last_timestamp: i64,
     /// A place for a user to programatically stick
     /// custom data.
-    pub(crate) custom_data: Box<[u8]>,
+    pub(crate) custom_data: DataCell,
     /// The underlying data.
     pub(crate) data: Box<[DataCell]>,
     #[serde(skip)]
@@ -182,12 +181,11 @@ pub(crate) struct SingleData {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct TieredData {
-    /// The timestamp of the last successful insertion
-    /// of data, excluding `custom_data`.
+    /// The timestamp of the last commit.
     pub(crate) last_timestamp: i64,
     /// A place for a user to programatically stick
     /// custom data.
-    pub(crate) custom_data: Box<[u8]>,
+    pub(crate) custom_data: DataCell,
     /// The width of the current tier.
     pub(crate) width: NonZeroU16,
     /// How much time is given to each cell in the tier.
@@ -316,7 +314,7 @@ impl TieredData {
         let interval = NonZeroU16::new(interval).ok_or(TimeseriesError::ZeroU16)?;
 
         Ok(Self {
-            custom_data: Box::new([]),
+            custom_data: DataCell::Empty,
             data: vec![DataCell::Empty; usize::from(width.get())].into_boxed_slice(),
             last_timestamp: i64::MIN,
             dirty: true,

@@ -139,7 +139,7 @@ impl SingleRunePartition {
                 data
             } else {
                 let data = SingleData {
-                    custom_data: Box::new([]),
+                    custom_data: DataCell::Empty,
                     data: vec![DataCell::Empty; usize::from(width.get())].into_boxed_slice(),
                     last_timestamp: i64::MIN,
                     dirty: true,
@@ -149,7 +149,7 @@ impl SingleRunePartition {
             }
         } else {
             let data = SingleData {
-                custom_data: Box::new([]),
+                custom_data: DataCell::Empty,
                 data: vec![DataCell::Empty; usize::from(width.get())].into_boxed_slice(),
                 last_timestamp: i64::MIN,
                 dirty: true,
@@ -218,6 +218,18 @@ impl SingleRuneContext {
     }
 
     #[function]
+    fn write_custom(&mut self, data: DataCell) {
+        self.data.custom_data = data;
+        self.data.dirty = true;
+        self.data.last_timestamp = self.timestamp;
+    }
+
+    #[function]
+    fn get_custom(&mut self) -> DataCell {
+        self.data.custom_data.clone()
+    }
+
+    #[function]
     /// Write either the verbatim passed in metric or
     /// a custom metric, perhaps after some processing.
     fn write_metric(&mut self, metric: Option<DataCell>) {
@@ -232,10 +244,9 @@ impl SingleRuneContext {
             .data
             .get_cell_mut(self.timestamp, self.metadata.interval.into());
 
-        if metric.ne(current_cell) {
-            *current_cell = metric;
-            self.data.dirty = true;
-        }
+        *current_cell = metric;
+        self.data.dirty = true;
+        self.data.last_timestamp = self.timestamp;
     }
 
     #[function(keep)]
@@ -355,6 +366,8 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(SingleRuneContext::commit)?;
     module.function_meta(SingleRuneContext::write_metric)?;
     module.function_meta(SingleRuneContext::metric)?;
+    module.function_meta(SingleRuneContext::write_custom)?;
+    module.function_meta(SingleRuneContext::get_custom)?;
     module.function_meta(DataCell::custom)?;
 
     Ok(module)

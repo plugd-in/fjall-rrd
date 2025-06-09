@@ -204,16 +204,54 @@ impl TieredImports for TieredComponent {
             .data
             .get_cell_mut(self.timestamp, total_interval);
 
-        if metric.ne(current_cell) {
-            *current_cell = metric;
-            current_tier.last_timestamp = self.timestamp;
-            current_tier.dirty = true;
-        }
+        *current_cell = metric;
+        current_tier.last_timestamp = self.timestamp;
+        current_tier.dirty = true;
     }
 
     /// Get the metric being inserted.
     fn metric(&mut self) -> DataCell {
         self.metric.clone().into()
+    }
+
+    /// Write custom data into the item.
+    ///
+    /// This differs from a metric and can be
+    /// used to store non-metric data across calls.
+    /// This can be useful for calculating and storing
+    /// deltas, for example.
+    fn write_custom_current(&mut self, data: DataCell) {
+        let Some(current_tier) = self.nth_tier else {
+            return;
+        };
+
+        let Some(current_tier) = self.tiers.get_mut(usize::from(current_tier)) else {
+            return;
+        };
+
+        let data = crate::DataCell::from(data);
+
+        current_tier.last_timestamp = self.timestamp;
+        current_tier.custom_data = data;
+        current_tier.dirty = true;
+    }
+
+    /// Get custom data for the item.
+    ///
+    /// This differs from a metric and can be
+    /// used to store non-metric data across calls.
+    /// This can be useful for calculating and storing
+    /// deltas, for example.
+    fn get_custom_current(&mut self) -> Option<DataCell> {
+        let Some(current_tier) = self.nth_tier else {
+            return None;
+        };
+
+        let Some(current_tier) = self.tiers.get(usize::from(current_tier)) else {
+            return None;
+        };
+
+        Some(current_tier.custom_data.clone().into())
     }
 }
 
