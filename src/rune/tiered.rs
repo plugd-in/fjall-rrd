@@ -399,6 +399,7 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(TieredRuneContext::write_metric)?;
     module.function_meta(TieredRuneContext::metric)?;
     module.function_meta(TieredRuneContext::empty)?;
+    module.function_meta(DataCell::custom)?;
 
     Ok(module)
 }

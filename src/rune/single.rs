@@ -355,6 +355,7 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(SingleRuneContext::commit)?;
     module.function_meta(SingleRuneContext::write_metric)?;
     module.function_meta(SingleRuneContext::metric)?;
+    module.function_meta(DataCell::custom)?;
 
     Ok(module)
 }

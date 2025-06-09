@@ -4,7 +4,7 @@ use std::num::{NonZeroU16, NonZeroU32};
 
 use bitcode::{deserialize, serialize};
 use fjall::Slice;
-use rune::{Any, function};
+use rune::{function, Any};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -124,7 +124,6 @@ pub(crate) enum Metadata {
     TieredWasm(TieredWasmMetadata),
 }
 
-
 impl From<&Metadata> for Slice {
     fn from(value: &Metadata) -> Self {
         serialize(&value)
@@ -160,6 +159,13 @@ pub enum DataCell {
     Empty,
 }
 
+impl DataCell {
+    #[function(path = DataCell::Custom)]
+    fn custom(data: Vec<u8>) -> Self {
+        Self::Custom(data.into_boxed_slice())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct SingleData {
     /// The timestamp of the last successful insertion
@@ -174,7 +180,7 @@ pub(crate) struct SingleData {
     pub(crate) dirty: bool,
 }
 
-#[derive(Any, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct TieredData {
     /// The timestamp of the last successful insertion
     /// of data, excluding `custom_data`.
@@ -298,12 +304,10 @@ impl TieredData {
         self.dirty = self.dirty || dirty;
     }
 
-    #[function(keep)]
     pub(crate) fn pristine(&self) -> bool {
         return self.last_timestamp == i64::MIN;
     }
 
-    #[function(keep, path = Self::new)]
     pub(crate) fn new_empty(width: u16, interval: u16) -> Result<Self, TimeseriesError>
     where
         Self: Sized,
