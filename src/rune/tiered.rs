@@ -324,12 +324,6 @@ impl TieredRuneContext {
         current_tier.clear_misses(self.timestamp, self.cumulative_interval);
     }
 
-    #[function]
-    /// Get the current tier, if any tier exists.
-    fn current_tier(&self) -> Option<TieredData> {
-        self.inner_current_tier().map(|current| current.clone())
-    }
-
     #[function(keep)]
     /// Get the current timestamp of the operation.
     fn timestamp(&self) -> i64 {
@@ -341,6 +335,34 @@ impl TieredRuneContext {
     /// with this operation.
     fn partition_name(&self) -> String {
         self.partition_name.deref().to_string()
+    }
+
+    #[function(keep)]
+    /// Look back at the last `n_cells` in the previous
+    /// tier.
+    fn look_back_previous(&self, n_cells: u16) -> Option<Vec<DataCell>> {
+        let Some(current_tier) = self.nth_tier.and_then(|tier| tier.checked_sub(1)) else {
+            return None;
+        };
+
+        let tiers = self.tiers.borrow();
+        let Some(previous_tier) = tiers.get(usize::from(current_tier)) else {
+            return None;
+        };
+
+        let cumulative_interval = if self.cumulative_interval == 0
+            || self.cumulative_interval == u32::from(previous_tier.interval.get())
+        {
+            0u32
+        } else {
+            self.cumulative_interval / u32::from(previous_tier.interval.get())
+        };
+
+        Some(
+            previous_tier
+                .look_back(self.timestamp, cumulative_interval, n_cells)
+                .into_vec(),
+        )
     }
 
     #[function(keep)]
@@ -367,18 +389,16 @@ impl TieredRuneContext {
 pub(crate) fn module() -> Result<Module, ContextError> {
     let mut module = Module::new();
     module.ty::<TieredRuneContext>()?;
-    module.ty::<TieredData>()?;
     module.ty::<DataCell>()?;
     module.function_meta(TieredRuneContext::look_back_current__meta)?;
+    module.function_meta(TieredRuneContext::look_back_previous__meta)?;
     module.function_meta(TieredRuneContext::partition_name__meta)?;
     module.function_meta(TieredRuneContext::clear_misses__meta)?;
-    module.function_meta(TieredRuneContext::current_tier)?;
     module.function_meta(TieredRuneContext::create_tier)?;
     module.function_meta(TieredRuneContext::commit_current)?;
     module.function_meta(TieredRuneContext::write_metric)?;
     module.function_meta(TieredRuneContext::metric)?;
     module.function_meta(TieredRuneContext::empty)?;
-    module.function_meta(TieredData::new_empty__meta)?;
 
     Ok(module)
 }

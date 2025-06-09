@@ -193,6 +193,11 @@ impl SingleRuneContext {
         return self.metadata.width.get();
     }
 
+    #[function]
+    fn metric(&self) -> DataCell {
+        self.metric.clone()
+    }
+
     #[function(keep)]
     fn pristine(&self) -> bool {
         return self.data.last_timestamp == i64::MIN;
@@ -349,6 +354,7 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(SingleRuneContext::clear_misses__meta)?;
     module.function_meta(SingleRuneContext::commit)?;
     module.function_meta(SingleRuneContext::write_metric)?;
+    module.function_meta(SingleRuneContext::metric)?;
 
     Ok(module)
 }

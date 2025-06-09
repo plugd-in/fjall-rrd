@@ -69,8 +69,16 @@ impl TieredImports for TieredComponent {
             return Vec::new();
         };
 
+        let cumulative_interval = if self.cumulative_interval == 0
+            || self.cumulative_interval == u32::from(previous_tier.interval.get())
+        {
+            0u32
+        } else {
+            self.cumulative_interval / u32::from(previous_tier.interval.get())
+        };
+
         previous_tier
-            .look_back(self.timestamp, self.cumulative_interval, how_far)
+            .look_back(self.timestamp, cumulative_interval, how_far)
             .into_iter()
             .map(Into::into)
             .collect_vec()
@@ -307,8 +315,8 @@ impl TieredWasmPartition {
         partition: Partition,
         metadata: TieredWasmMetadata,
     ) -> Result<Self, TimeseriesError> {
-        let compiled_component = Component::new(&engine, &metadata.component)
-            .map_err(TimeseriesError::WebAssembly)?;
+        let compiled_component =
+            Component::new(&engine, &metadata.component).map_err(TimeseriesError::WebAssembly)?;
 
         let components_with_imports = linker
             .instantiate_pre(&compiled_component)
