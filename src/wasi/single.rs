@@ -49,6 +49,7 @@ impl SingleImports for SingleComponent {
 
         u16::try_from((current_bucket - previous_bucket).clamp(0, self.metadata.width.get().into()))
             .expect("Within u16, by clamp.")
+            .saturating_sub(1)
     }
 
     fn write_multi_metric(&mut self, back: u16, metric: DataCell) {
@@ -69,9 +70,7 @@ impl SingleImports for SingleComponent {
                         break;
                     }
 
-                    if crate::DataCell::Empty.ne(cell) {
-                        *cell = metric.clone();
-                    }
+                    *cell = metric.clone();
 
                     back -= 1;
                 }
@@ -87,9 +86,7 @@ impl SingleImports for SingleComponent {
                         break;
                     }
 
-                    if crate::DataCell::Empty.ne(cell) {
-                        *cell = metric.clone();
-                    }
+                    *cell = metric.clone();
 
                     back -= 1;
                 }

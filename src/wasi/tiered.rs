@@ -64,7 +64,8 @@ impl TieredImports for TieredComponent {
             u16::try_from(
                 (current_bucket - previous_bucket).clamp(0, current_tier.width.get().into()),
             )
-            .expect("Within u16, by clamp."),
+            .expect("Within u16, by clamp.")
+            .saturating_sub(1),
         )
     }
 

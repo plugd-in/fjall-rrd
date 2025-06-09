@@ -205,6 +205,7 @@ impl SingleRuneContext {
 
         u16::try_from((current_bucket - previous_bucket).clamp(0, self.width().into()))
             .expect("Within u16, by clamp.")
+            .saturating_sub(1)
     }
 
     #[function]

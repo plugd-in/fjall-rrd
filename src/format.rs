@@ -266,9 +266,7 @@ impl TieredData {
                         break;
                     }
 
-                    if DataCell::Empty.ne(cell) {
-                        *cell = metric.clone();
-                    }
+                    *cell = metric.clone();
 
                     back -= 1;
                 }
@@ -284,9 +282,7 @@ impl TieredData {
                         break;
                     }
 
-                    if DataCell::Empty.ne(cell) {
-                        *cell = metric.clone();
-                    }
+                    *cell = metric.clone();
 
                     back -= 1;
                 }
