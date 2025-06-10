@@ -242,6 +242,19 @@ impl TieredRuneContext {
         }
     }
 
+    fn previous_comitted(&self) -> bool {
+        let Some(current_tier) = self.nth_tier.and_then(|tier| tier.checked_sub(1)) else {
+            return true;
+        };
+
+        let tiers = self.tiers.borrow();
+        let Some(previous_tier) = tiers.get(usize::from(current_tier)) else {
+            return true;
+        };
+
+        !previous_tier.pristine()
+    }
+
     #[function]
     fn empty(&self) -> bool {
         self.nth_tier.is_none()
@@ -337,6 +350,10 @@ impl TieredRuneContext {
 
     #[function]
     fn commit_current(&self) -> Result<(), TimeseriesError> {
+        if !self.previous_comitted() {
+            return Err(TimeseriesError::NotCommitted);
+        }
+
         if let Some(current) = self.inner_current_tier() {
             let partition = &self.partition;
 

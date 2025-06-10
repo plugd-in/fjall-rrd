@@ -34,6 +34,24 @@ pub(crate) struct TieredComponent {
     pub(crate) metric: crate::DataCell,
 }
 
+impl TieredComponent {
+    /// Whether the previous tier has been written.
+    ///
+    /// This is a precondition for comitting the current tier,
+    /// since otherwise the data becomes corrupted.
+    fn previous_committed(&self) -> bool {
+        let Some(previous_tier) = self.nth_tier.and_then(|nth_tier| nth_tier.checked_sub(1)) else {
+            return true;
+        };
+
+        let Some(previous_tier) = self.tiers.get(usize::from(previous_tier)) else {
+            return true;
+        };
+
+        !previous_tier.pristine()
+    }
+}
+
 impl fjall_rrd::hooks::data::Host for TieredComponent {}
 
 impl TieredImports for TieredComponent {
@@ -229,8 +247,14 @@ impl TieredImports for TieredComponent {
     /// Commit the current tier to storage.
     ///
     /// *Note:* The data is only committed if the current
-    /// data has been changed (e.g. through `write-metric`).
+    /// data has been changed (e.g. through `write-metric`)
+    /// and the previous tier has been committed to disk at
+    /// least once.
     fn commit_current(&mut self) {
+        if !self.previous_committed() {
+            return;
+        }
+
         let Some(nth_tier) = self.nth_tier else {
             return;
         };

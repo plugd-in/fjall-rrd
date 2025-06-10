@@ -28,6 +28,8 @@ pub enum TimeseriesError {
     StateUninit,
     #[error("Tried to open a new partition, but it already exists.")]
     PartitionExists,
+    #[error("Previous tier not committed...")]
+    NotCommitted,
 }
 
 impl<T> From<T> for TimeseriesError
