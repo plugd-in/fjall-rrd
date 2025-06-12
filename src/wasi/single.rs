@@ -19,10 +19,7 @@ use wasmtime::{
 
 use super::impl_data_cell;
 
-bindgen!({
-    path: "wit/fjall-rrd",
-    world: "fjall-rrd:hooks/single",
-});
+bindgen!("fjall-rrd:hooks/single" in "wit/fjall-rrd");
 impl_data_cell!();
 
 pub(crate) struct SingleComponent {
@@ -33,6 +30,23 @@ pub(crate) struct SingleComponent {
     pub(crate) data: SingleData,
     pub(crate) timestamp: i64,
     pub(crate) metric: crate::DataCell,
+}
+
+impl SingleComponent {
+    fn commit_dirty(mut self) -> Result<(), TimeseriesError> {
+        if self.data.dirty {
+            self.data.last_timestamp = self.timestamp;
+
+            self.partition.insert(
+                Slice::try_from(KeyType::Single(SingleKey {
+                    inner_key: self.inner_key,
+                }))?,
+                Slice::try_from(SeriesData::Single(self.data))?,
+            )?;
+        }
+
+        Ok(())
+    }
 }
 
 impl fjall_rrd::hooks::data::Host for SingleComponent {}
@@ -189,22 +203,6 @@ impl SingleImports for SingleComponent {
         }
     }
 
-    /// Commit any changes to storage.
-    fn commit(&mut self) -> () {
-        if self.data.dirty {
-            self.data.last_timestamp = self.timestamp;
-
-            if let Err(e) = self.partition.insert(
-                KeyType::Single(SingleKey {
-                    inner_key: self.inner_key.clone(),
-                }),
-                SeriesData::Single(self.data.clone()),
-            ) {
-                tracing::error!(?e, "Error inserting into timeseries database...");
-            }
-        }
-    }
-
     /// Write the given metric into the Round-robin
     /// structure at the cell for the current bucket.
     fn write_metric(&mut self, metric: DataCell) -> () {
@@ -294,7 +292,7 @@ impl From<(Single, Store<WasiStateMaybeUninit<SingleComponent>>)> for Persistent
 }
 
 impl PersistentSingleComponent {
-    fn handle_insert(&self, state: SingleComponent) -> Result<(), TimeseriesError> {
+    fn handle_insert(&self, state: SingleComponent) -> Result<SingleComponent, TimeseriesError> {
         let component = self.component.deref();
         let component = component.read();
         let store = self.store.deref();
@@ -311,7 +309,13 @@ impl PersistentSingleComponent {
 
         component
             .call_handle_single_metric(store.deref_mut())
-            .map_err(TimeseriesError::WebAssembly)
+            .map_err(TimeseriesError::WebAssembly)?;
+
+        store
+            .data_mut()
+            .state
+            .take()
+            .ok_or(TimeseriesError::StateUninit)
     }
 }
 
@@ -403,7 +407,7 @@ impl SingleWasmPartition {
             interval,
         });
 
-        meta.insert(name.as_ref(), &metadata)?;
+        meta.insert(name.as_ref(), Slice::try_from(&metadata)?)?;
 
         let Metadata::SingleWasm(metadata) = metadata else {
             panic!("This should never happen.");
@@ -458,12 +462,12 @@ impl SingleWasmPartition {
         let key = KeyType::Single(SingleKey {
             inner_key: user_key.into(),
         });
-        let encoded_key = Slice::from(&key);
+        let encoded_key = Slice::try_from(&key)?;
 
         let data = self.partition.get(encoded_key.as_ref())?;
 
         let data = if let Some(data) = data {
-            let data = SeriesData::from(data);
+            let data = SeriesData::try_from(data)?;
 
             if let SeriesData::Single(data) = data {
                 data
@@ -500,8 +504,8 @@ impl SingleWasmPartition {
             timestamp,
         };
 
-        self.component.handle_insert(single_component)?;
+        let single_component = self.component.handle_insert(single_component)?;
 
-        Ok(())
+        single_component.commit_dirty()
     }
 }

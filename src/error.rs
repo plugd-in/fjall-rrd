@@ -30,6 +30,8 @@ pub enum TimeseriesError {
     PartitionExists,
     #[error("Previous tier not committed...")]
     NotCommitted,
+    #[error("Failed to parse format. Data corrupted.")]
+    FormatError,
 }
 
 impl<T> From<T> for TimeseriesError

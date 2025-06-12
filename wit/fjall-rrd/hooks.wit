@@ -44,8 +44,6 @@ world single {
     /// Clear past misses from the last
     /// timestamp to now.
     import clear-misses: func();
-    /// Commit any changes to storage.
-    import commit: func();
     /// Write the given metric in the given number
     /// of cells backwards from the current cell,
     /// as well as the current cell.
@@ -138,23 +136,9 @@ world tiered {
     /// if it's the first tier or in terms of the number
     /// of cells in the lower tier.
     ///
-    /// *Note:* This does not commit the tier until
-    /// `commit-current` is called at the appropriate
-    /// time. Likewise, this does no change the current
-    /// tier to the created tier. You have to wait until
-    /// subsequent calls of the `handle-metric` hook
-    /// to modify and commit the created tier to storage.
-    ///
     /// *Warn:* Width and interval *must* be non-zero or
     /// this will silently fail.
     import create-tier: func(width: u16, interval: u16);
-    /// Commit the current tier to storage.
-    ///
-    /// *Note:* The data is only committed if the current
-    /// data has been changed (e.g. through `write-metric`)
-    /// and the previous tier has been committed to disk at
-    /// least once.
-    import commit-current: func();
     /// Write a metric into the current tier in the cell
     /// suitable for the current timestamp and cumulative
     /// interval. This is a no-op for items with no tiers.

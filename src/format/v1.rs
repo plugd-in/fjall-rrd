@@ -1,8 +1,5 @@
-//! Specifies the format of the data.
-
 use std::num::{NonZeroU16, NonZeroU32};
 
-use bitcode::{deserialize, serialize};
 use fjall::Slice;
 use rune::{Any, function};
 use serde::{Deserialize, Serialize};
@@ -58,23 +55,29 @@ impl KeyType {
     }
 }
 
-impl From<&KeyType> for Slice {
-    fn from(value: &KeyType) -> Self {
-        serialize(&value)
-            .expect("Metadata to always be serializable...")
-            .into()
+impl TryFrom<&KeyType> for Slice {
+    type Error = TimeseriesError;
+
+    fn try_from(value: &KeyType) -> Result<Self, TimeseriesError> {
+        postcard::to_stdvec(&value)
+            .map(Into::into)
+            .map_err(|_| TimeseriesError::FormatError)
     }
 }
 
-impl From<KeyType> for Slice {
-    fn from(value: KeyType) -> Self {
-        (&value).into()
+impl TryFrom<KeyType> for Slice {
+    type Error = TimeseriesError;
+
+    fn try_from(value: KeyType) -> Result<Self, TimeseriesError> {
+        (&value).try_into()
     }
 }
 
-impl From<Slice> for KeyType {
-    fn from(value: Slice) -> Self {
-        deserialize(value.as_ref()).expect("Metadata to always be serializable...")
+impl TryFrom<Slice> for KeyType {
+    type Error = TimeseriesError;
+
+    fn try_from(value: Slice) -> Result<Self, TimeseriesError> {
+        postcard::from_bytes(value.as_ref()).map_err(|_| TimeseriesError::FormatError)
     }
 }
 
@@ -124,23 +127,29 @@ pub(crate) enum Metadata {
     TieredWasm(TieredWasmMetadata),
 }
 
-impl From<&Metadata> for Slice {
-    fn from(value: &Metadata) -> Self {
-        serialize(&value)
-            .expect("Metadata to always be serializable...")
-            .into()
+impl TryFrom<&Metadata> for Slice {
+    type Error = TimeseriesError;
+
+    fn try_from(value: &Metadata) -> Result<Self, TimeseriesError> {
+        postcard::to_stdvec(&value)
+            .map(Into::into)
+            .map_err(|_| TimeseriesError::FormatError)
     }
 }
 
-impl From<Metadata> for Slice {
-    fn from(value: Metadata) -> Self {
-        (&value).into()
+impl TryFrom<Metadata> for Slice {
+    type Error = TimeseriesError;
+
+    fn try_from(value: Metadata) -> Result<Self, TimeseriesError> {
+        (&value).try_into()
     }
 }
 
-impl From<Slice> for Metadata {
-    fn from(value: Slice) -> Self {
-        deserialize(value.as_ref()).expect("Metadata to always be serializable...")
+impl TryFrom<Slice> for Metadata {
+    type Error = TimeseriesError;
+
+    fn try_from(value: Slice) -> Result<Self, TimeseriesError> {
+        postcard::from_bytes(value.as_ref()).map_err(|_| TimeseriesError::FormatError)
     }
 }
 
@@ -394,22 +403,28 @@ impl SeriesData {
     }
 }
 
-impl From<&SeriesData> for Slice {
-    fn from(value: &SeriesData) -> Self {
-        serialize(&value)
-            .expect("Metadata to always be serializable...")
-            .into()
+impl TryFrom<&SeriesData> for Slice {
+    type Error = TimeseriesError;
+
+    fn try_from(value: &SeriesData) -> Result<Self, TimeseriesError> {
+        postcard::to_stdvec(&value)
+            .map(Into::into)
+            .map_err(|_| TimeseriesError::FormatError)
     }
 }
 
-impl From<SeriesData> for Slice {
-    fn from(value: SeriesData) -> Self {
-        (&value).into()
+impl TryFrom<SeriesData> for Slice {
+    type Error = TimeseriesError;
+
+    fn try_from(value: SeriesData) -> Result<Self, TimeseriesError> {
+        (&value).try_into()
     }
 }
 
-impl From<Slice> for SeriesData {
-    fn from(value: Slice) -> Self {
-        deserialize(value.as_ref()).expect("Metadata to always be serializable...")
+impl TryFrom<Slice> for SeriesData {
+    type Error = TimeseriesError;
+
+    fn try_from(value: Slice) -> Result<Self, TimeseriesError> {
+        postcard::from_bytes(value.as_ref()).map_err(|_| TimeseriesError::FormatError)
     }
 }

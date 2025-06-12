@@ -5,11 +5,11 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
-bitcode = { version = "0.6.6", features = ["serde"] }
 chrono = "0.4.41"
 fjall = { version = "2.11.0", default-features = false }
 itertools = "0.14.0"
 parking_lot = "0.12.4"
+postcard = { version = "1.1.1", features = ["alloc", "use-std"] }
 rune = "0.14.0"
 serde = { version = "1.0.219", features = ["derive"] }
 thiserror = "2.0.12"

@@ -35,20 +35,22 @@ pub(crate) struct TieredComponent {
 }
 
 impl TieredComponent {
-    /// Whether the previous tier has been written.
-    ///
-    /// This is a precondition for comitting the current tier,
-    /// since otherwise the data becomes corrupted.
-    fn previous_committed(&self) -> bool {
-        let Some(previous_tier) = self.nth_tier.and_then(|nth_tier| nth_tier.checked_sub(1)) else {
-            return true;
-        };
+    fn commit_dirty(self) -> Result<(), TimeseriesError> {
+        for (nth_tier, mut tier) in self.tiers.into_iter().enumerate() {
+            if tier.dirty {
+                tier.last_timestamp = self.timestamp;
 
-        let Some(previous_tier) = self.tiers.get(usize::from(previous_tier)) else {
-            return true;
-        };
+                self.partition.insert(
+                    Slice::try_from(KeyType::Tier(TieredKey {
+                        inner_key: self.inner_key.as_ref().into(),
+                        nth_tier: u16::try_from(nth_tier).expect("limited tiers"),
+                    }))?,
+                    Slice::try_from(SeriesData::Tiered(tier))?,
+                )?;
+            }
+        }
 
-        !previous_tier.pristine()
+        Ok(())
     }
 }
 
@@ -244,40 +246,6 @@ impl TieredImports for TieredComponent {
         self.tiers.push(new_tier);
     }
 
-    /// Commit the current tier to storage.
-    ///
-    /// *Note:* The data is only committed if the current
-    /// data has been changed (e.g. through `write-metric`)
-    /// and the previous tier has been committed to disk at
-    /// least once.
-    fn commit_current(&mut self) {
-        if !self.previous_committed() {
-            return;
-        }
-
-        let Some(nth_tier) = self.nth_tier else {
-            return;
-        };
-
-        let Some(current_tier) = self.tiers.get_mut(usize::from(nth_tier)) else {
-            return;
-        };
-
-        if current_tier.dirty {
-            current_tier.last_timestamp = self.timestamp;
-
-            if let Err(e) = self.partition.insert(
-                KeyType::Tier(TieredKey {
-                    inner_key: self.inner_key.as_ref().into(),
-                    nth_tier: nth_tier,
-                }),
-                SeriesData::Tiered(current_tier.clone()),
-            ) {
-                tracing::error!(?e, "Error inserting into timeseries database...");
-            }
-        }
-    }
-
     /// Write a metric into the current tier in the cell
     /// suitable for the current timestamp and cumulative
     /// interval. This is a no-op for items with no tiers.
@@ -400,6 +368,10 @@ impl<'a> LockedPersistentTieredComponent<'a> {
             .as_mut()
             .ok_or(TimeseriesError::StateUninit)
     }
+
+    fn take_component(mut self) -> Option<TieredComponent> {
+        self.store.data_mut().state.take()
+    }
 }
 
 #[derive(Clone)]
@@ -515,7 +487,7 @@ impl TieredWasmPartition {
             component: component.into(),
         });
 
-        meta.insert(name.as_ref(), &metadata)?;
+        meta.insert(name.as_ref(), Slice::try_from(&metadata)?)?;
 
         let Metadata::TieredWasm(metadata) = metadata else {
             panic!("This should never happen.");
@@ -570,12 +542,20 @@ impl TieredWasmPartition {
             inner_key: user_key.into(),
             nth_tier: 0,
         });
-        let encoded_key = Slice::from(&key);
+        let encoded_key = Slice::try_from(&key)?;
 
         let tiers: Vec<TieredData> = self
             .partition
             .range(encoded_key.as_ref()..)
-            .map_ok(|(k, v)| (KeyType::from(k), SeriesData::from(v)))
+            .map(|maybe_value| match maybe_value {
+                Ok((key, value)) => {
+                    let key = KeyType::try_from(key)?;
+                    let value = SeriesData::try_from(value)?;
+
+                    Ok((key, value))
+                }
+                Err(e) => Err(TimeseriesError::Fjall(e)),
+            })
             .take_while(|read_result| {
                 read_result
                     .as_ref()
@@ -642,6 +622,10 @@ impl TieredWasmPartition {
             n += 1;
         }
 
-        Ok(())
+        let component = component
+            .take_component()
+            .ok_or(TimeseriesError::StateUninit)?;
+
+        component.commit_dirty()
     }
 }

@@ -82,7 +82,7 @@ impl SingleRunePartition {
             interval,
         });
 
-        meta.insert(name.as_ref(), &metadata)?;
+        meta.insert(name.as_ref(), Slice::try_from(&metadata)?)?;
 
         let Metadata::SingleRune(metadata) = metadata else {
             panic!("This should never happen.");
@@ -128,12 +128,12 @@ impl SingleRunePartition {
         let key = KeyType::Single(SingleKey {
             inner_key: user_key.into(),
         });
-        let encoded_key = Slice::from(&key);
+        let encoded_key = Slice::try_from(&key)?;
 
         let data = self.partition.get(encoded_key.as_ref())?;
 
         let data = if let Some(data) = data {
-            let data = SeriesData::from(data);
+            let data = SeriesData::try_from(data)?;
 
             if let SeriesData::Single(data) = data {
                 data
@@ -270,10 +270,10 @@ impl SingleRuneContext {
     fn commit(&self) -> Result<(), TimeseriesError> {
         if self.data.dirty {
             self.partition.insert(
-                KeyType::Single(SingleKey {
+                Slice::try_from(KeyType::Single(SingleKey {
                     inner_key: self.inner_key.clone(),
-                }),
-                SeriesData::Single(self.data.clone()),
+                }))?,
+                Slice::try_from(SeriesData::Single(self.data.clone()))?,
             )?;
         }
 

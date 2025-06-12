@@ -85,7 +85,7 @@ impl TieredRunePartition {
             script: script.into(),
         });
 
-        meta.insert(name.as_ref(), &metadata)?;
+        meta.insert(name.as_ref(), Slice::try_from(&metadata)?)?;
 
         let Metadata::TieredRune(metadata) = metadata else {
             panic!("This should never happen.");
@@ -131,12 +131,20 @@ impl TieredRunePartition {
             inner_key: user_key.into(),
             nth_tier: 0,
         });
-        let encoded_key = Slice::from(&key);
+        let encoded_key = Slice::try_from(&key)?;
 
         let tiers: Vec<TieredData> = self
             .partition
             .range(encoded_key.as_ref()..)
-            .map_ok(|(k, v)| (KeyType::from(k), SeriesData::from(v)))
+            .map(|maybe_value| match maybe_value {
+                Ok((key, value)) => {
+                    let key = KeyType::try_from(key)?;
+                    let value = SeriesData::try_from(value)?;
+
+                    Ok((key, value))
+                }
+                Err(e) => Err(TimeseriesError::Fjall(e)),
+            })
             .take_while(|read_result| {
                 read_result
                     .as_ref()
@@ -359,13 +367,13 @@ impl TieredRuneContext {
 
             if current.dirty {
                 partition.insert(
-                    KeyType::Tier(TieredKey {
+                    Slice::try_from(KeyType::Tier(TieredKey {
                         inner_key: self.inner_key.deref().into(),
                         nth_tier: self.nth_tier.expect(
                             "if we got here, there's a tier, and nth_tier needs to be something",
                         ),
-                    }),
-                    SeriesData::Tiered(current.clone()),
+                    }))?,
+                    Slice::try_from(SeriesData::Tiered(current.clone()))?,
                 )?;
             }
         }

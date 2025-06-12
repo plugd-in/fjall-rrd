@@ -187,7 +187,7 @@ impl TimeseriesDatabase {
             let partition =
                 keyspace.open_partition(name.as_ref(), PartitionCreateOptions::default())?;
 
-            let metadata = Metadata::from(meta);
+            let metadata = Metadata::try_from(meta)?;
 
             let timeseries_partition = match metadata {
                 Metadata::SingleRune(metadata) => {
