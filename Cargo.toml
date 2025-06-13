@@ -37,6 +37,3 @@ wasmtime-wasi = "33.0.0"
 
 [features]
 default = ["fjall/single_writer_tx"]
-
-[profile.release]
-lto = true
