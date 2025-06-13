@@ -1,7 +1,9 @@
 use fjall::Error as FjallError;
+#[cfg(feature = "rune")]
 use rune::{Any, BuildError, ContextError, alloc::Error as AllocError, runtime::VmError};
 use thiserror::Error;
 
+#[cfg(feature = "rune")]
 #[derive(Debug, Error)]
 pub enum RuneError {
     #[error("{0}")]
@@ -14,16 +16,20 @@ pub enum RuneError {
     VirtualMachine(#[from] VmError),
 }
 
-#[derive(Any, Debug, Error)]
+#[cfg_attr(feature = "rune", derive(Any))]
+#[derive(Debug, Error)]
 pub enum TimeseriesError {
+    #[cfg(feature = "rune")]
     #[error("{0}")]
     Rune(RuneError),
     #[error("{0}")]
     Fjall(#[from] FjallError),
+    #[cfg(feature = "wasm")]
     #[error("{0}")]
     WebAssembly(anyhow::Error),
     #[error("Required NonZeroU16, got 0.")]
     ZeroU16,
+    #[cfg(feature = "wasm")]
     #[error("Tried to execute WebAssembly component but the state is not initialized.")]
     StateUninit,
     #[error("Tried to open a new partition, but it already exists.")]
@@ -46,6 +52,7 @@ impl TimeseriesError {
     }
 }
 
+#[cfg(feature = "rune")]
 impl<T> From<T> for TimeseriesError
 where
     T: Into<RuneError>,

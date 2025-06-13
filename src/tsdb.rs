@@ -2,11 +2,13 @@ use std::{borrow::Borrow, collections::HashMap, num::NonZeroU16, sync::Arc};
 
 use fjall::{Keyspace, Partition, PartitionCreateOptions};
 use parking_lot::RwLock;
+
+use crate::{DataCell, error::TimeseriesError, format::Metadata};
+
+#[cfg(feature = "rune")]
+use crate::rune::{single::SingleRunePartition, tiered::TieredRunePartition};
+#[cfg(feature = "rune")]
 use rune::{Context, runtime::RuntimeContext};
-#[cfg(feature = "wasm")]
-use wasmtime::{
-    Config as WASMConfig, Engine as WASMEngine, InstanceAllocationStrategy, component::Linker,
-};
 
 #[cfg(feature = "wasm")]
 use super::wasm::{
@@ -14,17 +16,16 @@ use super::wasm::{
     single::{Single, SingleComponent, SingleWasmPartition},
     tiered::{Tiered, TieredComponent, TieredWasmPartition},
 };
-
-use crate::{
-    DataCell,
-    error::TimeseriesError,
-    format::Metadata,
-    rune::{single::SingleRunePartition, tiered::TieredRunePartition},
+#[cfg(feature = "wasm")]
+use wasmtime::{
+    Config as WASMConfig, Engine as WASMEngine, InstanceAllocationStrategy, component::Linker,
 };
 
 #[derive(Clone)]
 pub enum TimeseriesPartition {
+    #[cfg(feature = "rune")]
     SingleRune(SingleRunePartition),
+    #[cfg(feature = "rune")]
     TieredRune(TieredRunePartition),
     #[cfg(feature = "wasm")]
     SingleWasm(SingleWasmPartition),
@@ -32,12 +33,14 @@ pub enum TimeseriesPartition {
     TieredWasm(TieredWasmPartition),
 }
 
+#[cfg(feature = "rune")]
 impl From<SingleRunePartition> for TimeseriesPartition {
     fn from(value: SingleRunePartition) -> Self {
         Self::SingleRune(value)
     }
 }
 
+#[cfg(feature = "rune")]
 impl From<TieredRunePartition> for TimeseriesPartition {
     fn from(value: TieredRunePartition) -> Self {
         Self::TieredRune(value)
@@ -64,7 +67,9 @@ impl TimeseriesPartition {
         K: AsRef<[u8]>,
     {
         match self {
+            #[cfg(feature = "rune")]
             Self::SingleRune(part) => part.insert_metric(key, metric),
+            #[cfg(feature = "rune")]
             Self::TieredRune(part) => part.insert_metric(key, metric),
             #[cfg(feature = "wasm")]
             Self::SingleWasm(part) => part.insert_metric(key, metric),
@@ -73,6 +78,7 @@ impl TimeseriesPartition {
         }
     }
 
+    #[cfg(feature = "rune")]
     pub fn as_single_rune(&self) -> Option<&SingleRunePartition> {
         if let Self::SingleRune(part) = self {
             Some(part)
@@ -81,6 +87,7 @@ impl TimeseriesPartition {
         }
     }
 
+    #[cfg(feature = "rune")]
     pub fn as_tiered_rune(&self) -> Option<&TieredRunePartition> {
         if let Self::TieredRune(part) = self {
             Some(part)
@@ -113,9 +120,13 @@ pub struct TimeseriesDatabase {
     keyspace: Keyspace,
     meta_partition: Partition,
     partitions: Arc<RwLock<HashMap<Arc<str>, TimeseriesPartition>>>,
+    #[cfg(feature = "rune")]
     rune_single_context: Arc<Context>,
+    #[cfg(feature = "rune")]
     rune_single_runtime: Arc<RuntimeContext>,
+    #[cfg(feature = "rune")]
     rune_tiered_context: Arc<Context>,
+    #[cfg(feature = "rune")]
     rune_tiered_runtime: Arc<RuntimeContext>,
     #[cfg(feature = "wasm")]
     wasm_engine: WASMEngine,
@@ -142,21 +153,31 @@ impl TimeseriesDatabase {
 
         let meta_partition = keyspace.open_partition(partition_name, partition_options)?;
 
-        let mut rune_single_context = Context::with_config(true)?;
-        rune_single_context.install(crate::rune::single::module()?)?;
+        #[cfg(feature = "rune")]
+        let (rune_single_context, rune_single_runtime) = {
+            let mut rune_single_context = Context::with_config(true)?;
+            rune_single_context.install(crate::rune::single::module()?)?;
 
-        let rune_single_context = Arc::new(rune_single_context);
+            let rune_single_context = Arc::new(rune_single_context);
 
-        let rune_single_runtime = rune_single_context.runtime()?;
-        let rune_single_runtime = Arc::new(rune_single_runtime);
+            let rune_single_runtime = rune_single_context.runtime()?;
+            let rune_single_runtime = Arc::new(rune_single_runtime);
 
-        let mut rune_tiered_context = Context::with_config(true)?;
-        rune_tiered_context.install(crate::rune::tiered::module()?)?;
+            (rune_single_context, rune_single_runtime)
+        };
 
-        let rune_tiered_context = Arc::new(rune_tiered_context);
+        #[cfg(feature = "rune")]
+        let (rune_tiered_context, rune_tiered_runtime) = {
+            let mut rune_tiered_context = Context::with_config(true)?;
+            rune_tiered_context.install(crate::rune::tiered::module()?)?;
 
-        let rune_tiered_runtime = rune_tiered_context.runtime()?;
-        let rune_tiered_runtime = Arc::new(rune_tiered_runtime);
+            let rune_tiered_context = Arc::new(rune_tiered_context);
+
+            let rune_tiered_runtime = rune_tiered_context.runtime()?;
+            let rune_tiered_runtime = Arc::new(rune_tiered_runtime);
+
+            (rune_tiered_context, rune_tiered_runtime)
+        };
 
         #[cfg(feature = "wasm")]
         let (wasm_engine, wasm_single_linker, wasm_tiered_linker) = {
@@ -211,6 +232,7 @@ impl TimeseriesDatabase {
             let metadata = Metadata::try_from(meta)?;
 
             let timeseries_partition = match metadata {
+                #[cfg(feature = "rune")]
                 Metadata::SingleRune(metadata) => {
                     TimeseriesPartition::SingleRune(SingleRunePartition::new(
                         name.clone(),
@@ -220,6 +242,7 @@ impl TimeseriesDatabase {
                         partition,
                     )?)
                 }
+                #[cfg(feature = "rune")]
                 Metadata::TieredRune(metadata) => {
                     TimeseriesPartition::TieredRune(TieredRunePartition::new(
                         name.clone(),
@@ -258,9 +281,13 @@ impl TimeseriesDatabase {
             partitions: Arc::new(RwLock::new(partitions)),
             meta_partition,
             keyspace,
+            #[cfg(feature = "rune")]
             rune_single_context,
+            #[cfg(feature = "rune")]
             rune_single_runtime,
+            #[cfg(feature = "rune")]
             rune_tiered_context,
+            #[cfg(feature = "rune")]
             rune_tiered_runtime,
             #[cfg(feature = "wasm")]
             wasm_engine,
@@ -307,6 +334,7 @@ impl TimeseriesDatabase {
         )
     }
 
+    #[cfg(feature = "rune")]
     pub fn open_single_rune<N: AsRef<str>, S: AsRef<str>>(
         &self,
         name: N,
@@ -326,6 +354,7 @@ impl TimeseriesDatabase {
         )
     }
 
+    #[cfg(feature = "rune")]
     pub fn open_tiered_rune<N: AsRef<str>, S: AsRef<str>>(
         &self,
         name: N,

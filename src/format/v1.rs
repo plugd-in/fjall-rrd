@@ -3,6 +3,7 @@ use std::num::{NonZeroU16, NonZeroU32};
 use bytes::BufMut;
 use cfg_if::cfg_if;
 use fjall::Slice;
+#[cfg(feature = "rune")]
 use rune::{Any, function};
 use serde::{Deserialize, Serialize};
 
@@ -83,6 +84,7 @@ impl TryFrom<Slice> for KeyType {
     }
 }
 
+#[cfg(feature = "rune")]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct SingleRuneMetadata {
     /// How many cells the RRD structure can store.
@@ -94,6 +96,7 @@ pub(crate) struct SingleRuneMetadata {
     pub(crate) script: Box<str>,
 }
 
+#[cfg(feature = "rune")]
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub(crate) struct TieredRuneMetadata {
     /// Holds the collection script written in the [Rune](<https://rune-rs.github.io>)
@@ -131,7 +134,9 @@ pub(crate) struct TieredWasmMetadata {
 /// crate features.
 #[derive(Clone, Debug)]
 pub(crate) enum Metadata {
+    #[cfg(feature = "rune")]
     SingleRune(SingleRuneMetadata),
+    #[cfg(feature = "rune")]
     TieredRune(TieredRuneMetadata),
     #[cfg(feature = "wasm")]
     SingleWasm(SingleWasmMetadata),
@@ -146,6 +151,7 @@ impl TryFrom<&Metadata> for Slice {
         let mut data = Vec::<u8>::new();
 
         match value {
+            #[cfg(feature = "rune")]
             Metadata::SingleRune(meta) => {
                 let name = "single_rune";
                 data.put_u8(name.len() as u8);
@@ -153,6 +159,7 @@ impl TryFrom<&Metadata> for Slice {
 
                 data = postcard::to_extend(meta, data).map_err(|_| TimeseriesError::FormatError)?;
             }
+            #[cfg(feature = "rune")]
             Metadata::TieredRune(meta) => {
                 let name = "tiered_rune";
                 data.put_u8(name.len() as u8);
@@ -206,12 +213,28 @@ impl TryFrom<Slice> for Metadata {
             std::str::from_utf8(variant_name).map_err(|_| TimeseriesError::FormatError)?;
 
         match variant_name {
-            "single_rune" => Ok(Metadata::SingleRune(
-                postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
-            )),
-            "tiered_rune" => Ok(Metadata::TieredRune(
-                postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
-            )),
+            "single_rune" => {
+                cfg_if! {
+                    if #[cfg(feature = "rune")] {
+                        Ok(Metadata::SingleRune(
+                            postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
+                        ))
+                    } else {
+                        Err(TimeseriesError::LanguageDisabled("rune"))
+                    }
+                }
+            }
+            "tiered_rune" => {
+                cfg_if! {
+                    if #[cfg(feature = "rune")] {
+                        Ok(Metadata::TieredRune(
+                            postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
+                        ))
+                    } else {
+                        Err(TimeseriesError::LanguageDisabled("rune"))
+                    }
+                }
+            }
             "single_wasm" => {
                 cfg_if! {
                     if #[cfg(feature = "wasm")] {
@@ -241,20 +264,22 @@ impl TryFrom<Slice> for Metadata {
 
 /// The types of data that can be put into an RRD
 /// cell, at the user's discretion.
-#[derive(Any, Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "rune", derive(Any))]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub enum DataCell {
-    #[rune(constructor)]
+    #[cfg_attr(feature = "rune", rune(constructor))]
     Empty,
-    #[rune(constructor)]
-    U64(#[rune(get)] u64),
-    #[rune(constructor)]
-    Percent(#[rune(get)] u8),
-    #[rune(constructor)]
-    Text(#[rune(get)] String),
+    #[cfg_attr(feature = "rune", rune(constructor))]
+    U64(#[cfg_attr(feature = "rune", rune(get))] u64),
+    #[cfg_attr(feature = "rune", rune(constructor))]
+    Percent(#[cfg_attr(feature = "rune", rune(get))] u8),
+    #[cfg_attr(feature = "rune", rune(constructor))]
+    Text(#[cfg_attr(feature = "rune", rune(get))] String),
     Custom(Box<[u8]>),
 }
 
 impl DataCell {
+    #[cfg(feature = "rune")]
     #[function(path = DataCell::Custom)]
     fn custom(data: Vec<u8>) -> Self {
         Self::Custom(data.into_boxed_slice())
