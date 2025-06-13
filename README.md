@@ -35,8 +35,11 @@ Metrics are intercepted by logic that can decide whether to insert
 the metric, decide to transform the metric before insertion,
 decide the rollup logic for different tiers, etc.
 
-Currently, WebAssembly modules and the [Rune](https://github.com/rune-rs/rune)
-scripting language are supported.
+### Supported Languages
+The following language integrations are supported:
+
+* WebAssembly Components (feature: `wasm`)
+* [Rune](https://github.com/rune-rs/rune) (feature: `rune`)
 
 The WebAssembly interface is documented in the [wit](/wit/fjall-rrd) files.
 Currently, the Rune integration is undocumented.
