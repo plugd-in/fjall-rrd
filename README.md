@@ -5,6 +5,24 @@ insertion logic.
 ## Screenshots
 ![Rust implementation of the WebAssembly interface.](/images/rust-impl.png)
 
+# Stability
+The format of the data SHALL remain stable across and within versions.
+Any changes to the format SHALL be accompanied by automated migrations
+upon opening the database.
+
+That said, changes to Fjall's storage format do not apply to this stable
+format guarantee.
+
+Additions to the language interfaces will not result in a major version
+upgrade so long as those additions do not break existing interfaces. A
+breakage to existing interfaces or deprecation of a language interface
+will result in a major version bump.
+
+Changes to the existing public API (e.g. the `DataCell` type) will result
+in a major version bump, so long as those changes are not backward compatible.
+
+These version semantics will hold for versions including and following v0.1.0.
+
 ## Data Layout
 Supports inserting into a single circular buffer or inserting
 into "tiers" of data. This allows you to do simple insertions after
