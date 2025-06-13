@@ -1,5 +1,6 @@
 use std::num::{NonZeroU16, NonZeroU32};
 
+use bytes::BufMut;
 use fjall::Slice;
 use rune::{Any, function};
 use serde::{Deserialize, Serialize};
@@ -119,7 +120,13 @@ pub(crate) struct TieredRuneMetadata {
 
 /// Describes the format of the timeseries database in
 /// a partition.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+///
+/// Note: This enum is manually discriminated when
+/// serialized/deserialized using the length-prefixed
+/// snake_case variant name. This allows us to support
+/// enabling/disabling language integrations using
+/// crate features.
+#[derive(Clone, Debug)]
 pub(crate) enum Metadata {
     SingleRune(SingleRuneMetadata),
     SingleWasm(SingleWasmMetadata),
@@ -131,9 +138,40 @@ impl TryFrom<&Metadata> for Slice {
     type Error = TimeseriesError;
 
     fn try_from(value: &Metadata) -> Result<Self, TimeseriesError> {
-        postcard::to_stdvec(&value)
-            .map(Into::into)
-            .map_err(|_| TimeseriesError::FormatError)
+        let mut data = Vec::<u8>::new();
+
+        match value {
+            Metadata::SingleRune(meta) => {
+                let name = "single_rune";
+                data.put_u8(name.len() as u8);
+                data.put(name.as_bytes());
+
+                data = postcard::to_extend(meta, data).map_err(|_| TimeseriesError::FormatError)?;
+            }
+            Metadata::TieredRune(meta) => {
+                let name = "tiered_rune";
+                data.put_u8(name.len() as u8);
+                data.put(name.as_bytes());
+
+                data = postcard::to_extend(meta, data).map_err(|_| TimeseriesError::FormatError)?;
+            }
+            Metadata::SingleWasm(meta) => {
+                let name = "single_wasm";
+                data.put_u8(name.len() as u8);
+                data.put(name.as_bytes());
+
+                data = postcard::to_extend(meta, data).map_err(|_| TimeseriesError::FormatError)?;
+            }
+            Metadata::TieredWasm(meta) => {
+                let name = "tiered_wasm";
+                data.put_u8(name.len() as u8);
+                data.put(name.as_bytes());
+
+                data = postcard::to_extend(meta, data).map_err(|_| TimeseriesError::FormatError)?;
+            }
+        }
+
+        Ok(data.into())
     }
 }
 
@@ -149,7 +187,32 @@ impl TryFrom<Slice> for Metadata {
     type Error = TimeseriesError;
 
     fn try_from(value: Slice) -> Result<Self, TimeseriesError> {
-        postcard::from_bytes(value.as_ref()).map_err(|_| TimeseriesError::FormatError)
+        let variant_length: u8 = value.get(0).ok_or(TimeseriesError::FormatError)?.clone();
+
+        let (variant_name, meta) = value
+            .get(1..)
+            .ok_or(TimeseriesError::FormatError)?
+            .split_at_checked(usize::from(variant_length))
+            .ok_or(TimeseriesError::FormatError)?;
+
+        let variant_name =
+            std::str::from_utf8(variant_name).map_err(|_| TimeseriesError::FormatError)?;
+
+        match variant_name {
+            "single_rune" => Ok(Metadata::SingleRune(
+                postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
+            )),
+            "tiered_rune" => Ok(Metadata::TieredRune(
+                postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
+            )),
+            "single_wasm" => Ok(Metadata::SingleWasm(
+                postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
+            )),
+            "tiered_wasm" => Ok(Metadata::TieredWasm(
+                postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
+            )),
+            _ => Err(TimeseriesError::FormatError),
+        }
     }
 }
 
