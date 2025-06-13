@@ -2,13 +2,17 @@
 
 pub(crate) mod error;
 pub(crate) mod format;
-pub(crate) mod rune;
 pub(crate) mod tsdb;
 pub(crate) mod util;
-pub(crate) mod wasi;
+
+#[cfg(feature = "rune")]
+pub(crate) mod rune;
+#[cfg(feature = "wasm")]
+pub(crate) mod wasm;
 
 pub use error::{RuneError, TimeseriesError};
 pub use format::DataCell;
 pub use rune::{single::SingleRunePartition, tiered::TieredRunePartition};
 pub use tsdb::{TimeseriesDatabase, TimeseriesPartition};
-pub use wasi::{single::SingleWasmPartition, tiered::TieredWasmPartition};
+#[cfg(feature = "wasm")]
+pub use wasm::{single::SingleWasmPartition, tiered::TieredWasmPartition};

@@ -6,16 +6,17 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.98"
 bytes = "1.10.1"
+cfg-if = "1.0.1"
 chrono = "0.4.41"
 fjall = { version = "2.11.0", default-features = false }
 itertools = "0.14.0"
 parking_lot = "0.12.4"
 postcard = { version = "1.1.1", features = ["alloc", "use-std"] }
-rune = "0.14.0"
+rune = { version = "0.14.0", optional = true }
 serde = { version = "1.0.219", features = ["derive"] }
 thiserror = "2.0.12"
 tracing = "0.1.41"
-wasmtime = { version = "33.0.0", default-features = false, features = [
+wasmtime = { version = "33.0.0", optional = true, default-features = false, features = [
     "cranelift",
     "component-model",
     "runtime",
@@ -34,7 +35,9 @@ wasmtime = { version = "33.0.0", default-features = false, features = [
     "debug-builtins",
     "std",
 ] }
-wasmtime-wasi = "33.0.0"
+wasmtime-wasi = { version = "33.0.0", optional = true }
 
 [features]
-default = ["fjall/single_writer_tx"]
+default = ["fjall/single_writer_tx", "rune", "wasm"]
+rune = ["dep:rune"]
+wasm = ["dep:wasmtime", "dep:wasmtime-wasi"]

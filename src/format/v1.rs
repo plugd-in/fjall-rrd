@@ -1,6 +1,7 @@
 use std::num::{NonZeroU16, NonZeroU32};
 
 use bytes::BufMut;
+use cfg_if::cfg_if;
 use fjall::Slice;
 use rune::{Any, function};
 use serde::{Deserialize, Serialize};
@@ -83,17 +84,6 @@ impl TryFrom<Slice> for KeyType {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct SingleWasmMetadata {
-    /// How many cells the RRD structure can store.
-    pub(crate) width: NonZeroU16,
-    /// How much time is given to each cell.
-    pub(crate) interval: NonZeroU16,
-    /// Holds a WASM component that implements
-    /// [SingleComponent](crate::wasi::single::SingleComponent).
-    pub(crate) component: Box<[u8]>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct SingleRuneMetadata {
     /// How many cells the RRD structure can store.
     pub(crate) width: NonZeroU16,
@@ -105,17 +95,30 @@ pub(crate) struct SingleRuneMetadata {
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
-pub(crate) struct TieredWasmMetadata {
-    /// Holds a WASM component that implements
-    /// [TieredComponent](crate::wasi::tiered::TieredComponent).
-    pub(crate) component: Box<[u8]>,
-}
-
-#[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub(crate) struct TieredRuneMetadata {
     /// Holds the collection script written in the [Rune](<https://rune-rs.github.io>)
     /// programming language.
     pub(crate) script: Box<str>,
+}
+
+#[cfg(feature = "wasm")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct SingleWasmMetadata {
+    /// How many cells the RRD structure can store.
+    pub(crate) width: NonZeroU16,
+    /// How much time is given to each cell.
+    pub(crate) interval: NonZeroU16,
+    /// Holds a WASM component that implements
+    /// [SingleComponent](crate::wasi::single::SingleComponent).
+    pub(crate) component: Box<[u8]>,
+}
+
+#[cfg(feature = "wasm")]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+pub(crate) struct TieredWasmMetadata {
+    /// Holds a WASM component that implements
+    /// [TieredComponent](crate::wasi::tiered::TieredComponent).
+    pub(crate) component: Box<[u8]>,
 }
 
 /// Describes the format of the timeseries database in
@@ -129,8 +132,10 @@ pub(crate) struct TieredRuneMetadata {
 #[derive(Clone, Debug)]
 pub(crate) enum Metadata {
     SingleRune(SingleRuneMetadata),
-    SingleWasm(SingleWasmMetadata),
     TieredRune(TieredRuneMetadata),
+    #[cfg(feature = "wasm")]
+    SingleWasm(SingleWasmMetadata),
+    #[cfg(feature = "wasm")]
     TieredWasm(TieredWasmMetadata),
 }
 
@@ -155,6 +160,7 @@ impl TryFrom<&Metadata> for Slice {
 
                 data = postcard::to_extend(meta, data).map_err(|_| TimeseriesError::FormatError)?;
             }
+            #[cfg(feature = "wasm")]
             Metadata::SingleWasm(meta) => {
                 let name = "single_wasm";
                 data.put_u8(name.len() as u8);
@@ -162,6 +168,7 @@ impl TryFrom<&Metadata> for Slice {
 
                 data = postcard::to_extend(meta, data).map_err(|_| TimeseriesError::FormatError)?;
             }
+            #[cfg(feature = "wasm")]
             Metadata::TieredWasm(meta) => {
                 let name = "tiered_wasm";
                 data.put_u8(name.len() as u8);
@@ -205,12 +212,28 @@ impl TryFrom<Slice> for Metadata {
             "tiered_rune" => Ok(Metadata::TieredRune(
                 postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
             )),
-            "single_wasm" => Ok(Metadata::SingleWasm(
-                postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
-            )),
-            "tiered_wasm" => Ok(Metadata::TieredWasm(
-                postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
-            )),
+            "single_wasm" => {
+                cfg_if! {
+                    if #[cfg(feature = "wasm")] {
+                        Ok(Metadata::SingleWasm(
+                            postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
+                        ))
+                    } else {
+                        Err(TimeseriesError::LanguageDisabled("wasm"))
+                    }
+                }
+            }
+            "tiered_wasm" => {
+                cfg_if! {
+                    if #[cfg(feature = "wasm")] {
+                        Ok(Metadata::TieredWasm(
+                            postcard::from_bytes(meta).map_err(|_| TimeseriesError::FormatError)?,
+                        ))
+                    } else {
+                        Err(TimeseriesError::LanguageDisabled("wasm"))
+                    }
+                }
+            }
             _ => Err(TimeseriesError::FormatError),
         }
     }

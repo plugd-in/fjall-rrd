@@ -17,6 +17,12 @@ mod v1;
 pub use v1::DataCell;
 
 pub(crate) use v1::{
-    KeyType, Metadata, SeriesData, SingleData, SingleKey, SingleRuneMetadata, SingleWasmMetadata,
-    TieredData, TieredKey, TieredRuneMetadata, TieredWasmMetadata,
+    KeyType, Metadata, SeriesData, SingleData, SingleKey, SingleRuneMetadata,
+    TieredData, TieredKey, TieredRuneMetadata,
+};
+
+#[cfg(feature = "wasm")]
+pub(crate) use v1::{
+    SingleWasmMetadata,
+    TieredWasmMetadata,
 };

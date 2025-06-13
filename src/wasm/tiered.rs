@@ -8,10 +8,8 @@ use crate::{
     TimeseriesError,
     format::{KeyType, Metadata, SeriesData, TieredData, TieredKey, TieredWasmMetadata},
     util::{TimeCellMut, timestamp_bucket},
-    wasi::WasiStateMaybeUninit,
 };
 
-use super::impl_data_cell;
 use fjall::{Keyspace, Partition, PartitionCreateOptions, Slice};
 use itertools::Itertools;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -19,6 +17,8 @@ use wasmtime::{
     Engine, Store,
     component::{Component, Linker, bindgen},
 };
+
+use super::{WasiStateMaybeUninit, impl_data_cell};
 
 bindgen!("fjall-rrd:hooks/tiered" in "wit/fjall-rrd");
 impl_data_cell!();

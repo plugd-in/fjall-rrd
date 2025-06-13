@@ -8,7 +8,6 @@ use crate::{
     TimeseriesError,
     format::{KeyType, Metadata, SeriesData, SingleData, SingleKey, SingleWasmMetadata},
     util::{TimeCell, TimeCellMut, timestamp_bucket},
-    wasi::WasiStateMaybeUninit,
 };
 use fjall::{Keyspace, Partition, PartitionCreateOptions, Slice};
 use parking_lot::RwLock;
@@ -17,7 +16,7 @@ use wasmtime::{
     component::{Component, Linker, bindgen},
 };
 
-use super::impl_data_cell;
+use super::{WasiStateMaybeUninit, impl_data_cell};
 
 bindgen!("fjall-rrd:hooks/single" in "wit/fjall-rrd");
 impl_data_cell!();

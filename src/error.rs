@@ -32,6 +32,18 @@ pub enum TimeseriesError {
     NotCommitted,
     #[error("Failed to parse format. Data corrupted.")]
     FormatError,
+    #[error("Found disabled language integration ({0}).")]
+    LanguageDisabled(&'static str),
+}
+
+impl TimeseriesError {
+    pub(crate) fn as_disabled_language(&self) -> Option<&'static str> {
+        if let Self::LanguageDisabled(language) = self {
+            Some(language)
+        } else {
+            None
+        }
+    }
 }
 
 impl<T> From<T> for TimeseriesError

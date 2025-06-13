@@ -3,8 +3,16 @@ use std::{borrow::Borrow, collections::HashMap, num::NonZeroU16, sync::Arc};
 use fjall::{Keyspace, Partition, PartitionCreateOptions};
 use parking_lot::RwLock;
 use rune::{Context, runtime::RuntimeContext};
+#[cfg(feature = "wasm")]
 use wasmtime::{
     Config as WASMConfig, Engine as WASMEngine, InstanceAllocationStrategy, component::Linker,
+};
+
+#[cfg(feature = "wasm")]
+use super::wasm::{
+    WasiStateMaybeUninit,
+    single::{Single, SingleComponent, SingleWasmPartition},
+    tiered::{Tiered, TieredComponent, TieredWasmPartition},
 };
 
 use crate::{
@@ -12,18 +20,15 @@ use crate::{
     error::TimeseriesError,
     format::Metadata,
     rune::{single::SingleRunePartition, tiered::TieredRunePartition},
-    wasi::{
-        WasiStateMaybeUninit,
-        single::{Single, SingleComponent, SingleWasmPartition},
-        tiered::{Tiered, TieredComponent, TieredWasmPartition},
-    },
 };
 
 #[derive(Clone)]
 pub enum TimeseriesPartition {
     SingleRune(SingleRunePartition),
     TieredRune(TieredRunePartition),
+    #[cfg(feature = "wasm")]
     SingleWasm(SingleWasmPartition),
+    #[cfg(feature = "wasm")]
     TieredWasm(TieredWasmPartition),
 }
 
@@ -39,12 +44,14 @@ impl From<TieredRunePartition> for TimeseriesPartition {
     }
 }
 
+#[cfg(feature = "wasm")]
 impl From<SingleWasmPartition> for TimeseriesPartition {
     fn from(value: SingleWasmPartition) -> Self {
         Self::SingleWasm(value)
     }
 }
 
+#[cfg(feature = "wasm")]
 impl From<TieredWasmPartition> for TimeseriesPartition {
     fn from(value: TieredWasmPartition) -> Self {
         Self::TieredWasm(value)
@@ -59,7 +66,9 @@ impl TimeseriesPartition {
         match self {
             Self::SingleRune(part) => part.insert_metric(key, metric),
             Self::TieredRune(part) => part.insert_metric(key, metric),
+            #[cfg(feature = "wasm")]
             Self::SingleWasm(part) => part.insert_metric(key, metric),
+            #[cfg(feature = "wasm")]
             Self::TieredWasm(part) => part.insert_metric(key, metric),
         }
     }
@@ -80,6 +89,7 @@ impl TimeseriesPartition {
         }
     }
 
+    #[cfg(feature = "wasm")]
     pub fn as_single_wasm(&self) -> Option<&SingleWasmPartition> {
         if let Self::SingleWasm(part) = self {
             Some(part)
@@ -88,6 +98,7 @@ impl TimeseriesPartition {
         }
     }
 
+    #[cfg(feature = "wasm")]
     pub fn as_tiered_wasm(&self) -> Option<&TieredWasmPartition> {
         if let Self::TieredWasm(part) = self {
             Some(part)
@@ -106,8 +117,11 @@ pub struct TimeseriesDatabase {
     rune_single_runtime: Arc<RuntimeContext>,
     rune_tiered_context: Arc<Context>,
     rune_tiered_runtime: Arc<RuntimeContext>,
+    #[cfg(feature = "wasm")]
     wasm_engine: WASMEngine,
+    #[cfg(feature = "wasm")]
     wasm_single_linker: Linker<WasiStateMaybeUninit<SingleComponent>>,
+    #[cfg(feature = "wasm")]
     wasm_tiered_linker: Linker<WasiStateMaybeUninit<TieredComponent>>,
 }
 
@@ -144,40 +158,47 @@ impl TimeseriesDatabase {
         let rune_tiered_runtime = rune_tiered_context.runtime()?;
         let rune_tiered_runtime = Arc::new(rune_tiered_runtime);
 
-        let mut wasm_config = WASMConfig::default();
+        #[cfg(feature = "wasm")]
+        let (wasm_engine, wasm_single_linker, wasm_tiered_linker) = {
+            let mut wasm_config = WASMConfig::default();
 
-        wasm_config.consume_fuel(true);
+            wasm_config.consume_fuel(true);
 
-        wasm_config.strategy(wasmtime::Strategy::Cranelift);
-        wasm_config.memory_init_cow(true);
+            wasm_config.strategy(wasmtime::Strategy::Cranelift);
+            wasm_config.memory_init_cow(true);
 
-        wasm_config.allocation_strategy(InstanceAllocationStrategy::Pooling(Default::default()));
+            wasm_config
+                .allocation_strategy(InstanceAllocationStrategy::Pooling(Default::default()));
 
-        let wasm_engine = WASMEngine::new(&wasm_config).map_err(TimeseriesError::WebAssembly)?;
+            let wasm_engine =
+                WASMEngine::new(&wasm_config).map_err(TimeseriesError::WebAssembly)?;
 
-        let mut wasm_single_linker = Linker::new(&wasm_engine);
-        Single::add_to_linker(
-            &mut wasm_single_linker,
-            |component: &mut WasiStateMaybeUninit<SingleComponent>| {
-                component.state.as_mut().expect("Checked init before call")
-            },
-        )
-        .map_err(TimeseriesError::WebAssembly)?;
-
-        wasmtime_wasi::p2::add_to_linker_sync(&mut wasm_single_linker)
+            let mut wasm_single_linker = Linker::new(&wasm_engine);
+            Single::add_to_linker(
+                &mut wasm_single_linker,
+                |component: &mut WasiStateMaybeUninit<SingleComponent>| {
+                    component.state.as_mut().expect("Checked init before call")
+                },
+            )
             .map_err(TimeseriesError::WebAssembly)?;
 
-        let mut wasm_tiered_linker = Linker::new(&wasm_engine);
-        Tiered::add_to_linker(
-            &mut wasm_tiered_linker,
-            |component: &mut WasiStateMaybeUninit<TieredComponent>| {
-                component.state.as_mut().expect("Checked init before call")
-            },
-        )
-        .map_err(TimeseriesError::WebAssembly)?;
+            wasmtime_wasi::p2::add_to_linker_sync(&mut wasm_single_linker)
+                .map_err(TimeseriesError::WebAssembly)?;
 
-        wasmtime_wasi::p2::add_to_linker_sync(&mut wasm_tiered_linker)
+            let mut wasm_tiered_linker = Linker::new(&wasm_engine);
+            Tiered::add_to_linker(
+                &mut wasm_tiered_linker,
+                |component: &mut WasiStateMaybeUninit<TieredComponent>| {
+                    component.state.as_mut().expect("Checked init before call")
+                },
+            )
             .map_err(TimeseriesError::WebAssembly)?;
+
+            wasmtime_wasi::p2::add_to_linker_sync(&mut wasm_tiered_linker)
+                .map_err(TimeseriesError::WebAssembly)?;
+
+            (wasm_engine, wasm_single_linker, wasm_tiered_linker)
+        };
 
         let mut partitions = HashMap::new();
         for key_pair in meta_partition.iter() {
@@ -208,6 +229,7 @@ impl TimeseriesDatabase {
                         partition,
                     )?)
                 }
+                #[cfg(feature = "wasm")]
                 Metadata::SingleWasm(metadata) => {
                     TimeseriesPartition::SingleWasm(SingleWasmPartition::new(
                         name.clone(),
@@ -217,6 +239,7 @@ impl TimeseriesDatabase {
                         metadata,
                     )?)
                 }
+                #[cfg(feature = "wasm")]
                 Metadata::TieredWasm(metadata) => {
                     TimeseriesPartition::TieredWasm(TieredWasmPartition::new(
                         name.clone(),
@@ -239,12 +262,16 @@ impl TimeseriesDatabase {
             rune_single_runtime,
             rune_tiered_context,
             rune_tiered_runtime,
+            #[cfg(feature = "wasm")]
             wasm_engine,
+            #[cfg(feature = "wasm")]
             wasm_single_linker,
+            #[cfg(feature = "wasm")]
             wasm_tiered_linker,
         })
     }
 
+    #[cfg(feature = "wasm")]
     pub fn open_single_wasm<N: AsRef<str>, W: AsRef<[u8]>>(
         &self,
         name: N,
@@ -264,6 +291,7 @@ impl TimeseriesDatabase {
         )
     }
 
+    #[cfg(feature = "wasm")]
     pub fn open_tiered_wasm<N: AsRef<str>, W: AsRef<[u8]>>(
         &self,
         name: N,
