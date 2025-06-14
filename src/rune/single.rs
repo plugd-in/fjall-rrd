@@ -3,9 +3,7 @@ use std::{cell::RefCell, num::NonZeroU16, ops::Deref, rc::Rc, sync::Arc};
 use fjall::{Keyspace, Partition, PartitionCreateOptions, Slice};
 use parking_lot::RwLock;
 use rune::{
-    self, Any, Context, ContextError, Module, Source, Sources, ToTypeHash, Unit, Vm,
-    alloc::clone::TryClone,
-    function,
+    self, Any, Context, ContextError, Module, Source, Sources, ToTypeHash, Unit, Vm, function,
     runtime::{Args, RuntimeContext},
 };
 
@@ -21,15 +19,16 @@ pub struct SingleRunePartition {
     name: Arc<str>,
     partition: Partition,
     metadata: SingleRuneMetadata,
+    rune_context: Arc<Context>,
     rune_runtime_context: Arc<RuntimeContext>,
-    rune_unit: Arc<RwLock<Unit>>,
+    rune_unit: Arc<RwLock<Arc<Unit>>>,
 }
 
 #[allow(unused)]
 impl SingleRunePartition {
     pub(crate) fn new(
         name: Arc<str>,
-        context: &Context,
+        context: Arc<Context>,
         runtime: Arc<RuntimeContext>,
         metadata: SingleRuneMetadata,
         partition: Partition,
@@ -37,11 +36,13 @@ impl SingleRunePartition {
         let mut sources = Sources::new();
         sources.insert(Source::memory(&metadata.script)?)?;
 
-        let unit = rune::prepare(&mut sources).with_context(context).build()?;
-
-        let rune_unit = Arc::new(RwLock::new(unit));
+        let unit = rune::prepare(&mut sources)
+            .with_context(context.deref())
+            .build()?;
+        let rune_unit = Arc::new(RwLock::new(Arc::new(unit)));
 
         Ok(Self {
+            rune_context: context,
             rune_runtime_context: runtime,
             name,
             metadata,
@@ -53,7 +54,7 @@ impl SingleRunePartition {
     pub(crate) fn open_new<N: AsRef<str>, S: AsRef<str>>(
         keyspace: &Keyspace,
         meta: &Partition,
-        context: &Context,
+        context: Arc<Context>,
         runtime_context: Arc<RuntimeContext>,
         name: N,
         width: NonZeroU16,
@@ -74,8 +75,11 @@ impl SingleRunePartition {
         let mut sources = Sources::new();
         sources.insert(Source::memory(script)?)?;
 
-        let unit = rune::prepare(&mut sources).with_context(context).build()?;
-        let rune_unit = Arc::new(RwLock::new(unit));
+        let unit = rune::prepare(&mut sources)
+            .with_context(context.deref())
+            .build()?;
+
+        let rune_unit = Arc::new(RwLock::new(Arc::new(unit)));
 
         let metadata = Metadata::SingleRune(SingleRuneMetadata {
             script: script.into(),
@@ -91,6 +95,7 @@ impl SingleRunePartition {
 
         let partition = SingleRunePartition {
             name: name.clone(),
+            rune_context: context,
             rune_runtime_context: runtime_context.clone(),
             rune_unit: rune_unit,
             partition,
@@ -108,13 +113,32 @@ impl SingleRunePartition {
         let unit = self.rune_unit.deref();
         let unit = {
             let unit = unit.read();
-            Arc::new(unit.try_clone()?)
+
+            unit.deref().clone()
         };
 
         let mut vm = Vm::new(self.rune_runtime_context.clone(), unit);
         let mut output = vm.execute(name, args)?;
 
         output.complete().into_result()?;
+
+        Ok(())
+    }
+
+    pub fn update_script<S>(&self, script: S) -> Result<(), TimeseriesError>
+    where
+        S: AsRef<str>,
+    {
+        let mut unit = self.rune_unit.write();
+
+        let mut sources = Sources::new();
+        sources.insert(Source::memory(script)?)?;
+
+        let new_unit = rune::prepare(&mut sources)
+            .with_context(self.rune_context.deref())
+            .build()?;
+
+        *unit = Arc::new(new_unit);
 
         Ok(())
     }

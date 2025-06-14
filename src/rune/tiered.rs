@@ -10,9 +10,7 @@ use fjall::{Keyspace, Partition, PartitionCreateOptions, Slice};
 use itertools::Itertools;
 use parking_lot::RwLock;
 use rune::{
-    self, Any, Context, ContextError, Module, Source, Sources, ToTypeHash, Unit, Vm,
-    alloc::clone::TryClone,
-    function,
+    self, Any, Context, ContextError, Module, Source, Sources, ToTypeHash, Unit, Vm, function,
     runtime::{Args, RuntimeContext},
 };
 
@@ -29,15 +27,16 @@ pub struct TieredRunePartition {
     name: Arc<str>,
     partition: Partition,
     metadata: TieredRuneMetadata,
+    rune_context: Arc<Context>,
     rune_runtime_context: Arc<RuntimeContext>,
-    rune_unit: Arc<RwLock<Unit>>,
+    rune_unit: Arc<RwLock<Arc<Unit>>>,
 }
 
 #[allow(unused)]
 impl TieredRunePartition {
     pub(crate) fn new(
         name: Arc<str>,
-        context: &Context,
+        context: Arc<Context>,
         runtime: Arc<RuntimeContext>,
         metadata: TieredRuneMetadata,
         partition: Partition,
@@ -45,11 +44,14 @@ impl TieredRunePartition {
         let mut sources = Sources::new();
         sources.insert(Source::memory(&metadata.script)?)?;
 
-        let unit = rune::prepare(&mut sources).with_context(context).build()?;
+        let unit = rune::prepare(&mut sources)
+            .with_context(context.deref())
+            .build()?;
 
-        let rune_unit = Arc::new(RwLock::new(unit));
+        let rune_unit = Arc::new(RwLock::new(Arc::new(unit)));
 
         Ok(Self {
+            rune_context: context,
             rune_runtime_context: runtime,
             name,
             metadata,
@@ -61,7 +63,7 @@ impl TieredRunePartition {
     pub(crate) fn open_new<N: AsRef<str>, S: AsRef<str>>(
         keyspace: &Keyspace,
         meta: &Partition,
-        context: &Context,
+        context: Arc<Context>,
         runtime_context: Arc<RuntimeContext>,
         name: N,
         script: S,
@@ -80,8 +82,10 @@ impl TieredRunePartition {
         let mut sources = Sources::new();
         sources.insert(Source::memory(script)?)?;
 
-        let unit = rune::prepare(&mut sources).with_context(context).build()?;
-        let rune_unit = Arc::new(RwLock::new(unit));
+        let unit = rune::prepare(&mut sources)
+            .with_context(context.deref())
+            .build()?;
+        let rune_unit = Arc::new(RwLock::new(Arc::new(unit)));
 
         let metadata = Metadata::TieredRune(TieredRuneMetadata {
             script: script.into(),
@@ -95,6 +99,7 @@ impl TieredRunePartition {
 
         let partition = TieredRunePartition {
             name: name.clone(),
+            rune_context: context,
             rune_runtime_context: runtime_context,
             rune_unit: rune_unit,
             partition,
@@ -112,13 +117,32 @@ impl TieredRunePartition {
         let unit = self.rune_unit.deref();
         let unit = {
             let unit = unit.read();
-            Arc::new(unit.try_clone()?)
+
+            unit.deref().clone()
         };
 
         let mut vm = Vm::new(self.rune_runtime_context.clone(), unit);
         let mut output = vm.execute(name, args)?;
 
         output.complete().into_result()?;
+
+        Ok(())
+    }
+
+    pub fn update_script<S>(&self, script: S) -> Result<(), TimeseriesError>
+    where
+        S: AsRef<str>,
+    {
+        let mut unit = self.rune_unit.write();
+
+        let mut sources = Sources::new();
+        sources.insert(Source::memory(script)?)?;
+
+        let new_unit = rune::prepare(&mut sources)
+            .with_context(self.rune_context.deref())
+            .build()?;
+
+        *unit = Arc::new(new_unit);
 
         Ok(())
     }

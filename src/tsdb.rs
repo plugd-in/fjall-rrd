@@ -248,7 +248,7 @@ impl TimeseriesDatabase {
                 Metadata::SingleRune(metadata) => {
                     TimeseriesPartition::SingleRune(SingleRunePartition::new(
                         name.clone(),
-                        &rune_single_context,
+                        rune_single_context.clone(),
                         rune_single_runtime.clone(),
                         metadata,
                         partition,
@@ -258,7 +258,7 @@ impl TimeseriesDatabase {
                 Metadata::TieredRune(metadata) => {
                     TimeseriesPartition::TieredRune(TieredRunePartition::new(
                         name.clone(),
-                        &rune_tiered_context,
+                        rune_tiered_context.clone(),
                         rune_tiered_runtime.clone(),
                         metadata,
                         partition,
@@ -357,7 +357,7 @@ impl TimeseriesDatabase {
         SingleRunePartition::open_new(
             &self.keyspace,
             &self.meta_partition,
-            &self.rune_single_context,
+            self.rune_single_context.clone(),
             self.rune_single_runtime.clone(),
             name,
             width,
@@ -375,7 +375,7 @@ impl TimeseriesDatabase {
         TieredRunePartition::open_new(
             &self.keyspace,
             &self.meta_partition,
-            &self.rune_tiered_context,
+            self.rune_tiered_context.clone(),
             self.rune_tiered_runtime.clone(),
             name,
             script,
