@@ -10,7 +10,7 @@ use fjall::{Keyspace, Partition, PartitionCreateOptions, Slice};
 use itertools::Itertools;
 use parking_lot::RwLock;
 use rune::{
-    Any, Context, ContextError, Module, Source, Sources, ToTypeHash, Unit, Vm,
+    self, Any, Context, ContextError, Module, Source, Sources, ToTypeHash, Unit, Vm,
     alloc::clone::TryClone,
     function,
     runtime::{Args, RuntimeContext},
@@ -23,6 +23,8 @@ use crate::{
 };
 
 #[derive(Clone)]
+/// Tiered Round-robin structure that use the
+/// [Rune](rune) scripting language for logic.
 pub struct TieredRunePartition {
     name: Arc<str>,
     partition: Partition,

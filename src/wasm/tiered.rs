@@ -404,6 +404,8 @@ impl From<(Tiered, Store<WasiStateMaybeUninit<TieredComponent>>)> for Persistent
 }
 
 #[derive(Clone)]
+/// Tiered Round-robin structure that use the
+/// WebAssembly Components for logic.
 pub struct TieredWasmPartition {
     name: Arc<str>,
     partition: Partition,

@@ -22,6 +22,13 @@ use wasmtime::{
 };
 
 #[derive(Clone)]
+/// The general interface to timeseries data.
+///
+/// To replace scripts or perform language-specific
+/// actions, you can use a match statement to extract
+/// the language-specific variant, or you can use functions
+/// like, for example, [as_single_rune](TimeseriesPartition)
+/// to try to get the specific language+type of partition.
 pub enum TimeseriesPartition {
     #[cfg(feature = "rune")]
     SingleRune(SingleRunePartition),
@@ -116,6 +123,11 @@ impl TimeseriesPartition {
 }
 
 #[derive(Clone)]
+/// The main [TimeseriesDatabase] struct.
+///
+/// Used to open [TimeseriesPartitions](TimeseriesPartition) with
+/// seperately stored timeseries data and customized insertion/collection
+/// logic.
 pub struct TimeseriesDatabase {
     keyspace: Keyspace,
     meta_partition: Partition,

@@ -1,3 +1,14 @@
+//! WebAssembly integration integration.
+//!
+//! Allows you to bring your own language, so long
+//! as the language can be compiled into WebAssembly.
+//!
+//! Good security and performance.
+//!
+//! This project includes a `wit/` directory that documents
+//! the interface. Using a tool like
+//! [wit-bindgen](https://github.com/bytecodealliance/wit-bindgen).
+
 use wasmtime_wasi::{
     ResourceTable,
     p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView},
@@ -5,6 +16,9 @@ use wasmtime_wasi::{
 
 pub(crate) mod single;
 pub(crate) mod tiered;
+
+pub use single::SingleWasmPartition;
+pub use tiered::TieredWasmPartition;
 
 pub(crate) struct WasiStateMaybeUninit<T> {
     pub(crate) wasi: WasiCtx,

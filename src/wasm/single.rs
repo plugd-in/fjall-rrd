@@ -319,6 +319,8 @@ impl PersistentSingleComponent {
 }
 
 #[derive(Clone)]
+/// Single RRD structure that uses WebAssembly
+/// for logic.
 pub struct SingleWasmPartition {
     name: Arc<str>,
     partition: Partition,

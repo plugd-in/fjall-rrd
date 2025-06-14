@@ -5,6 +5,7 @@ use thiserror::Error;
 
 #[cfg(feature = "rune")]
 #[derive(Debug, Error)]
+/// Errors that can occur with the Rune scripting language.
 pub enum RuneError {
     #[error("{0}")]
     Alloc(#[from] AllocError),
@@ -18,6 +19,7 @@ pub enum RuneError {
 
 #[cfg_attr(feature = "rune", derive(Any))]
 #[derive(Debug, Error)]
+/// All the errors that can occur.
 pub enum TimeseriesError {
     #[cfg(feature = "rune")]
     #[error("{0}")]

@@ -3,6 +3,7 @@ use std::{num::NonZeroU16, ops::Deref, sync::Arc};
 use fjall::{Keyspace, Partition, PartitionCreateOptions, Slice};
 use parking_lot::RwLock;
 use rune::{
+    self,
     Any, Context, ContextError, Module, Source, Sources, ToTypeHash, Unit, Vm,
     alloc::clone::TryClone,
     function,
@@ -16,6 +17,7 @@ use crate::{
 };
 
 #[derive(Clone)]
+/// Single RRD structure that uses the [Rune](rune) scripting language.
 pub struct SingleRunePartition {
     name: Arc<str>,
     partition: Partition,
