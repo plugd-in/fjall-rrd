@@ -10,7 +10,7 @@ cfg-if = "1.0.1"
 chrono = "0.4.41"
 fjall = { version = "2.11.0", default-features = false }
 itertools = "0.14.0"
-lz4_flex = "0.11.3"
+lz4_flex = { version = "0.11.3", optional = true }
 parking_lot = "0.12.4"
 postcard = { version = "1.1.1", features = ["alloc", "use-std"] }
 rune = { version = "0.14.0", optional = true }
@@ -42,3 +42,4 @@ wasmtime-wasi = { version = "33.0.0", optional = true }
 default = ["fjall/single_writer_tx", "rune", "wasm"]
 rune = ["dep:rune"]
 wasm = ["dep:wasmtime", "dep:wasmtime-wasi"]
+backups = ["dep:lz4_flex"]

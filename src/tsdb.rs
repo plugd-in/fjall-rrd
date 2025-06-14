@@ -136,6 +136,7 @@ pub struct TimeseriesDatabase {
     /// recovering from a backup.
     ///
     /// Creating a backup will just use Fjall's [Snapshots](fjall::Snapshot).
+    #[cfg(feature = "backups")]
     backup_lock: Arc<RwLock<()>>,
     #[cfg(feature = "rune")]
     rune_single_context: Arc<Context>,
