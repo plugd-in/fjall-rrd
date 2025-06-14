@@ -132,6 +132,11 @@ pub struct TimeseriesDatabase {
     keyspace: Keyspace,
     meta_partition: Partition,
     partitions: Arc<RwLock<HashMap<Arc<str>, TimeseriesPartition>>>,
+    /// Used to lock timeseries operations while
+    /// recovering from a backup.
+    ///
+    /// Creating a backup will just use Fjall's [Snapshots](fjall::Snapshot).
+    backup_lock: Arc<RwLock<()>>,
     #[cfg(feature = "rune")]
     rune_single_context: Arc<Context>,
     #[cfg(feature = "rune")]
@@ -291,6 +296,7 @@ impl TimeseriesDatabase {
 
         Ok(Self {
             partitions: Arc::new(RwLock::new(partitions)),
+            backup_lock: Default::default(),
             meta_partition,
             keyspace,
             #[cfg(feature = "rune")]
@@ -318,16 +324,22 @@ impl TimeseriesDatabase {
         interval: NonZeroU16,
         component: W,
     ) -> Result<SingleWasmPartition, TimeseriesError> {
-        SingleWasmPartition::open_new(
+        let name = Arc::<str>::from(name.as_ref());
+        let wasm_part = SingleWasmPartition::open_new(
             &self.keyspace,
             &self.meta_partition,
             self.wasm_engine.clone(),
             self.wasm_single_linker.clone(),
-            name,
+            name.clone(),
             width,
             interval,
             component,
-        )
+        )?;
+
+        let mut partitions = self.partitions.write();
+        partitions.insert(name, TimeseriesPartition::SingleWasm(wasm_part.clone()));
+
+        Ok(wasm_part)
     }
 
     #[cfg(feature = "wasm")]
@@ -336,14 +348,20 @@ impl TimeseriesDatabase {
         name: N,
         component: W,
     ) -> Result<TieredWasmPartition, TimeseriesError> {
-        TieredWasmPartition::open_new(
+        let name = Arc::<str>::from(name.as_ref());
+        let wasm_part = TieredWasmPartition::open_new(
             &self.keyspace,
             &self.meta_partition,
             self.wasm_engine.clone(),
             self.wasm_tiered_linker.clone(),
-            name,
+            name.clone(),
             component,
-        )
+        )?;
+
+        let mut partitions = self.partitions.write();
+        partitions.insert(name, TimeseriesPartition::TieredWasm(wasm_part.clone()));
+
+        Ok(wasm_part)
     }
 
     #[cfg(feature = "rune")]
@@ -354,16 +372,23 @@ impl TimeseriesDatabase {
         interval: NonZeroU16,
         script: S,
     ) -> Result<SingleRunePartition, TimeseriesError> {
-        SingleRunePartition::open_new(
+        let name = Arc::<str>::from(name.as_ref());
+
+        let rune_part = SingleRunePartition::open_new(
             &self.keyspace,
             &self.meta_partition,
             self.rune_single_context.clone(),
             self.rune_single_runtime.clone(),
-            name,
+            name.clone(),
             width,
             interval,
             script,
-        )
+        )?;
+
+        let mut partitions = self.partitions.write();
+        partitions.insert(name, TimeseriesPartition::SingleRune(rune_part.clone()));
+
+        Ok(rune_part)
     }
 
     #[cfg(feature = "rune")]
@@ -372,14 +397,20 @@ impl TimeseriesDatabase {
         name: N,
         script: S,
     ) -> Result<TieredRunePartition, TimeseriesError> {
-        TieredRunePartition::open_new(
+        let name = Arc::<str>::from(name.as_ref());
+        let rune_part = TieredRunePartition::open_new(
             &self.keyspace,
             &self.meta_partition,
             self.rune_tiered_context.clone(),
             self.rune_tiered_runtime.clone(),
-            name,
+            name.clone(),
             script,
-        )
+        )?;
+
+        let mut partitions = self.partitions.write();
+        partitions.insert(name, TimeseriesPartition::TieredRune(rune_part.clone()));
+
+        Ok(rune_part)
     }
 
     pub fn get_partition<N>(&self, name: N) -> Result<Option<TimeseriesPartition>, TimeseriesError>

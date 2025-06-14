@@ -365,20 +365,17 @@ impl SingleWasmPartition {
         })
     }
 
-    pub(crate) fn open_new<N: AsRef<str>, W: AsRef<[u8]>>(
+    pub(crate) fn open_new<W: AsRef<[u8]>>(
         keyspace: &Keyspace,
         meta: &Partition,
         engine: Engine,
         linker: Linker<WasiStateMaybeUninit<SingleComponent>>,
-        name: N,
+        name: Arc<str>,
         width: NonZeroU16,
         interval: NonZeroU16,
         component: W,
     ) -> Result<Self, TimeseriesError> {
-        let name = name.as_ref();
         let component = component.as_ref();
-
-        let name = Arc::<str>::from(name);
 
         if let Some(_meta) = meta.get(name.as_ref())? {
             return Err(TimeseriesError::PartitionExists);

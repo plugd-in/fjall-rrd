@@ -51,20 +51,17 @@ impl SingleRunePartition {
         })
     }
 
-    pub(crate) fn open_new<N: AsRef<str>, S: AsRef<str>>(
+    pub(crate) fn open_new<S: AsRef<str>>(
         keyspace: &Keyspace,
         meta: &Partition,
         context: Arc<Context>,
         runtime_context: Arc<RuntimeContext>,
-        name: N,
+        name: Arc<str>,
         width: NonZeroU16,
         interval: NonZeroU16,
         script: S,
     ) -> Result<Self, TimeseriesError> {
-        let name = name.as_ref();
         let script = script.as_ref();
-
-        let name = Arc::<str>::from(name);
 
         if let Some(_meta) = meta.get(name.as_ref())? {
             return Err(TimeseriesError::PartitionExists);
