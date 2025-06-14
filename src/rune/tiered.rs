@@ -1,7 +1,7 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
     num::{NonZeroU16, NonZeroU32},
-    ops::Deref,
+    ops::{Deref, DerefMut},
     rc::Rc,
     sync::Arc,
 };
@@ -205,6 +205,23 @@ impl TieredRunePartition {
             n += 1;
         }
 
+        let mut tiers = tiers.borrow_mut();
+        let tiers = std::mem::take(tiers.deref_mut());
+
+        for (nth_tier, mut tier) in tiers.into_iter().enumerate() {
+            if tier.dirty {
+                tier.last_timestamp = timestamp;
+
+                self.partition.insert(
+                    Slice::try_from(KeyType::Tier(TieredKey {
+                        inner_key: user_key.as_ref().into(),
+                        nth_tier: u16::try_from(nth_tier).expect("limited tiers"),
+                    }))?,
+                    Slice::try_from(SeriesData::Tiered(tier))?,
+                )?;
+            }
+        }
+
         Ok(())
     }
 }
@@ -359,31 +376,6 @@ impl TieredRuneContext {
     }
 
     #[function]
-    fn commit_current(&self) -> Result<(), TimeseriesError> {
-        if !self.previous_comitted() {
-            return Err(TimeseriesError::NotCommitted);
-        }
-
-        if let Some(current) = self.inner_current_tier() {
-            let partition = &self.partition;
-
-            if current.dirty {
-                partition.insert(
-                    Slice::try_from(KeyType::Tier(TieredKey {
-                        inner_key: self.inner_key.deref().into(),
-                        nth_tier: self.nth_tier.expect(
-                            "if we got here, there's a tier, and nth_tier needs to be something",
-                        ),
-                    }))?,
-                    Slice::try_from(SeriesData::Tiered(current.clone()))?,
-                )?;
-            }
-        }
-
-        Ok(())
-    }
-
-    #[function]
     fn create_tier(&mut self, width: u16, interval: u16) -> Result<(), TimeseriesError> {
         let width = NonZeroU16::new(width).ok_or(TimeseriesError::ZeroU16)?;
         let interval = NonZeroU16::new(interval).ok_or(TimeseriesError::ZeroU16)?;
@@ -481,7 +473,6 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(TieredRuneContext::partition_name__meta)?;
     module.function_meta(TieredRuneContext::clear_misses__meta)?;
     module.function_meta(TieredRuneContext::create_tier)?;
-    module.function_meta(TieredRuneContext::commit_current)?;
     module.function_meta(TieredRuneContext::write_metric)?;
     module.function_meta(TieredRuneContext::write_custom_current)?;
     module.function_meta(TieredRuneContext::get_custom_current)?;
