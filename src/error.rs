@@ -40,6 +40,8 @@ pub enum TimeseriesError {
     NotCommitted,
     #[error("Failed to parse format. Data corrupted.")]
     FormatError,
+    #[error("Unknown version prefix.")]
+    UnknownFormatVersion,
     #[error("Found disabled language integration ({0}).")]
     LanguageDisabled(&'static str),
 }

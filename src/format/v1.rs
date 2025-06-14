@@ -1,4 +1,7 @@
-use std::num::{NonZeroU16, NonZeroU32};
+use std::{
+    num::{NonZeroU16, NonZeroU32},
+    ops::Deref,
+};
 
 use bytes::BufMut;
 use cfg_if::cfg_if;
@@ -11,6 +14,8 @@ use crate::{
     TimeseriesError,
     util::{TimeCell, timestamp_bucket},
 };
+
+static FORMAT_VERSION: u8 = 0;
 
 /// Points to a tier's data in a tiered RRD database.
 #[derive(Serialize, Deserialize)]
@@ -62,7 +67,9 @@ impl TryFrom<&KeyType> for Slice {
     type Error = TimeseriesError;
 
     fn try_from(value: &KeyType) -> Result<Self, TimeseriesError> {
-        postcard::to_stdvec(&value)
+        let buf = vec![FORMAT_VERSION];
+
+        postcard::to_extend(value, buf)
             .map(Into::into)
             .map_err(|_| TimeseriesError::FormatError)
     }
@@ -80,7 +87,16 @@ impl TryFrom<Slice> for KeyType {
     type Error = TimeseriesError;
 
     fn try_from(value: Slice) -> Result<Self, TimeseriesError> {
-        postcard::from_bytes(value.as_ref()).map_err(|_| TimeseriesError::FormatError)
+        let (version, value) = value
+            .deref()
+            .split_at_checked(1)
+            .ok_or(TimeseriesError::FormatError)?;
+
+        if version[0] != FORMAT_VERSION {
+            return Err(TimeseriesError::UnknownFormatVersion);
+        }
+
+        postcard::from_bytes(value).map_err(|_| TimeseriesError::FormatError)
     }
 }
 
@@ -148,7 +164,7 @@ impl TryFrom<&Metadata> for Slice {
     type Error = TimeseriesError;
 
     fn try_from(value: &Metadata) -> Result<Self, TimeseriesError> {
-        let mut data = Vec::<u8>::new();
+        let mut data = vec![FORMAT_VERSION];
 
         match value {
             #[cfg(feature = "rune")]
@@ -201,10 +217,16 @@ impl TryFrom<Slice> for Metadata {
     type Error = TimeseriesError;
 
     fn try_from(value: Slice) -> Result<Self, TimeseriesError> {
-        let variant_length: u8 = value.get(0).ok_or(TimeseriesError::FormatError)?.clone();
+        let version = value.get(0).ok_or(TimeseriesError::FormatError)?.clone();
+
+        if version != FORMAT_VERSION {
+            return Err(TimeseriesError::UnknownFormatVersion);
+        }
+
+        let variant_length = value.get(1).ok_or(TimeseriesError::FormatError)?.clone();
 
         let (variant_name, meta) = value
-            .get(1..)
+            .get(2..)
             .ok_or(TimeseriesError::FormatError)?
             .split_at_checked(usize::from(variant_length))
             .ok_or(TimeseriesError::FormatError)?;
@@ -518,7 +540,9 @@ impl TryFrom<&SeriesData> for Slice {
     type Error = TimeseriesError;
 
     fn try_from(value: &SeriesData) -> Result<Self, TimeseriesError> {
-        postcard::to_stdvec(&value)
+        let buf = vec![FORMAT_VERSION];
+
+        postcard::to_extend(&value, buf)
             .map(Into::into)
             .map_err(|_| TimeseriesError::FormatError)
     }
@@ -536,6 +560,14 @@ impl TryFrom<Slice> for SeriesData {
     type Error = TimeseriesError;
 
     fn try_from(value: Slice) -> Result<Self, TimeseriesError> {
-        postcard::from_bytes(value.as_ref()).map_err(|_| TimeseriesError::FormatError)
+        let (version, value) = value
+            .split_at_checked(1)
+            .ok_or(TimeseriesError::FormatError)?;
+
+        if version[0] != FORMAT_VERSION {
+            return Err(TimeseriesError::UnknownFormatVersion);
+        }
+
+        postcard::from_bytes(value).map_err(|_| TimeseriesError::FormatError)
     }
 }

@@ -2,7 +2,10 @@
 //!
 //! Internally, the format is versioned. The format isn't
 //! allowed to break across or within versions, without
-//! an automated migration process.
+//! an automated migration process. When messages are
+//! into Fjall, they should be prefixed with a u8 version.
+//! If the most significant bit of the u8 is set, then the
+//! version number will be in the next 15 bits.
 //!
 //! Changes to the format version should result
 //! in an upgrade to the formats in the database
