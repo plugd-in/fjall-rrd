@@ -1,10 +1,9 @@
-use std::{num::NonZeroU16, ops::Deref, sync::Arc};
+use std::{cell::RefCell, num::NonZeroU16, ops::Deref, rc::Rc, sync::Arc};
 
 use fjall::{Keyspace, Partition, PartitionCreateOptions, Slice};
 use parking_lot::RwLock;
 use rune::{
-    self,
-    Any, Context, ContextError, Module, Source, Sources, ToTypeHash, Unit, Vm,
+    self, Any, Context, ContextError, Module, Source, Sources, ToTypeHash, Unit, Vm,
     alloc::clone::TryClone,
     function,
     runtime::{Args, RuntimeContext},
@@ -161,18 +160,32 @@ impl SingleRunePartition {
         };
 
         let timestamp = chrono::Utc::now().timestamp();
-        self.exec_rune_fn(
-            ["handle_single_insert"],
-            (SingleRuneContext {
-                partition_name: self.name.clone(),
-                inner_key: user_key.into(),
-                partition: self.partition.clone(),
-                metadata: self.metadata.clone(),
-                data: data,
-                metric,
-                timestamp,
-            },),
-        )?;
+        let data = Rc::new(RefCell::new(Some(data)));
+        let context = SingleRuneContext {
+            partition_name: self.name.clone(),
+            inner_key: user_key.into(),
+            partition: self.partition.clone(),
+            metadata: self.metadata.clone(),
+            data: data.clone(),
+            metric,
+            timestamp,
+        };
+
+        self.exec_rune_fn(["handle_single_insert"], (context,))?;
+
+        let mut data = data.borrow_mut();
+        let mut data = data.take().ok_or(TimeseriesError::StateUninit)?;
+
+        if data.dirty {
+            data.last_timestamp = timestamp;
+
+            self.partition.insert(
+                Slice::try_from(KeyType::Single(SingleKey {
+                    inner_key: user_key.into(),
+                }))?,
+                Slice::try_from(SeriesData::Single(data))?,
+            )?;
+        }
 
         Ok(())
     }
@@ -184,7 +197,9 @@ pub(crate) struct SingleRuneContext {
     pub(crate) inner_key: Box<[u8]>,
     pub(crate) partition: Partition,
     pub(crate) metadata: SingleRuneMetadata,
-    pub(crate) data: SingleData,
+    // Rc<RefCell<Option>> so we can Option::take it
+    // after we are done with it.
+    pub(crate) data: Rc<RefCell<Option<SingleData>>>,
     pub(crate) timestamp: i64,
     pub(crate) metric: DataCell,
 }
@@ -201,9 +216,11 @@ impl SingleRuneContext {
             return 0;
         }
 
+        let data = self.data.borrow();
+        let data = data.as_ref().expect("Never uninit.");
+
         let current_bucket = timestamp_bucket(self.timestamp, self.metadata.interval.into());
-        let previous_bucket =
-            timestamp_bucket(self.data.last_timestamp, self.metadata.interval.into());
+        let previous_bucket = timestamp_bucket(data.last_timestamp, self.metadata.interval.into());
 
         u16::try_from((current_bucket - previous_bucket).clamp(0, self.width().into()))
             .expect("Within u16, by clamp.")
@@ -214,13 +231,15 @@ impl SingleRuneContext {
     fn write_multi_metric(&mut self, back: u16, metric: DataCell) {
         let mut back = back;
 
-        let idx = self
-            .data
+        let mut data = self.data.borrow_mut();
+        let data = data.as_mut().expect("Never uninit.");
+
+        let idx = data
             .data
             .cell_idx(self.timestamp, self.metadata.interval.into());
 
         {
-            let before = self.data.data.get_mut(0..=usize::from(idx));
+            let before = data.data.get_mut(0..=usize::from(idx));
 
             if let Some(before) = before {
                 for cell in before.into_iter().rev() {
@@ -238,7 +257,7 @@ impl SingleRuneContext {
         }
 
         {
-            let after = self.data.data.get_mut(usize::from(idx)..);
+            let after = data.data.get_mut(usize::from(idx)..);
 
             if let Some(after) = after {
                 for cell in after.into_iter().skip(1).rev() {
@@ -255,7 +274,7 @@ impl SingleRuneContext {
             }
         }
 
-        self.data.dirty = true;
+        data.dirty = true;
     }
 
     #[function]
@@ -265,21 +284,10 @@ impl SingleRuneContext {
 
     #[function(keep)]
     fn pristine(&self) -> bool {
-        self.data.last_timestamp == i64::MIN && self.data.dirty == false
-    }
+        let data = self.data.borrow();
+        let data = data.as_ref().expect("Never uninit.");
 
-    #[function]
-    fn commit(&self) -> Result<(), TimeseriesError> {
-        if self.data.dirty {
-            self.partition.insert(
-                Slice::try_from(KeyType::Single(SingleKey {
-                    inner_key: self.inner_key.clone(),
-                }))?,
-                Slice::try_from(SeriesData::Single(self.data.clone()))?,
-            )?;
-        }
-
-        Ok(())
+        data.last_timestamp == i64::MIN && data.dirty == false
     }
 
     #[function]
@@ -288,35 +296,34 @@ impl SingleRuneContext {
     }
 
     #[function]
-    fn write_custom(&mut self, data: DataCell) {
-        self.data.custom_data = data;
-        self.data.dirty = true;
-        self.data.last_timestamp = self.timestamp;
+    fn write_custom(&mut self, custom: DataCell) {
+        let mut data = self.data.borrow_mut();
+        let data = data.as_mut().expect("Never uninit.");
+
+        data.custom_data = custom;
+        data.dirty = true;
     }
 
     #[function]
     fn get_custom(&mut self) -> DataCell {
-        self.data.custom_data.clone()
+        let data = self.data.borrow();
+        let data = data.as_ref().expect("Never uninit.");
+
+        data.custom_data.clone()
     }
 
     #[function]
-    /// Write either the verbatim passed in metric or
-    /// a custom metric, perhaps after some processing.
-    fn write_metric(&mut self, metric: Option<DataCell>) {
-        let metric = if let Some(metric) = metric {
-            metric
-        } else {
-            self.metric.clone()
-        };
+    /// Write the given metric into the Round-robin structure.
+    fn write_metric(&mut self, metric: DataCell) {
+        let mut data = self.data.borrow_mut();
+        let data = data.as_mut().expect("Never uninit.");
 
-        let current_cell = self
-            .data
+        let current_cell = data
             .data
             .get_cell_mut(self.timestamp, self.metadata.interval.into());
 
         *current_cell = metric;
-        self.data.dirty = true;
-        self.data.last_timestamp = self.timestamp;
+        data.dirty = true;
     }
 
     #[function(keep)]
@@ -329,19 +336,20 @@ impl SingleRuneContext {
 
         let mut dirty = false;
 
-        let current_bucket = timestamp_bucket(self.timestamp, self.metadata.interval.into());
-        let previous_bucket =
-            timestamp_bucket(self.data.last_timestamp, self.metadata.interval.into());
+        let mut data = self.data.borrow_mut();
+        let data = data.as_mut().expect("Never uninit.");
 
-        let idx = self
-            .data
+        let current_bucket = timestamp_bucket(self.timestamp, self.metadata.interval.into());
+        let previous_bucket = timestamp_bucket(data.last_timestamp, self.metadata.interval.into());
+
+        let idx = data
             .data
             .cell_idx(self.timestamp, self.metadata.interval.into());
 
         let mut bucket_offset = (current_bucket - previous_bucket).clamp(0, self.width().into());
 
         {
-            let before = self.data.data.get_mut(0..=usize::from(idx));
+            let before = data.data.get_mut(0..=usize::from(idx));
 
             if let Some(before) = before {
                 for cell in before.into_iter().rev() {
@@ -360,7 +368,7 @@ impl SingleRuneContext {
         }
 
         {
-            let after = self.data.data.get_mut(usize::from(idx)..);
+            let after = data.data.get_mut(usize::from(idx)..);
 
             if let Some(after) = after {
                 for cell in after.into_iter().skip(1).rev() {
@@ -378,9 +386,7 @@ impl SingleRuneContext {
             }
         }
 
-        if !self.data.dirty {
-            self.data.dirty = dirty;
-        }
+        data.dirty = data.dirty || dirty;
     }
 
     #[function(keep)]
@@ -396,10 +402,13 @@ impl SingleRuneContext {
         let interval = self.metadata.interval;
         let mut n_cells = n_cells.min(self.metadata.width.get());
 
-        let mut cells = Vec::new();
-        let cell = self.data.data.cell_idx(self.timestamp, interval.into());
+        let data = self.data.borrow();
+        let data = data.as_ref().expect("Never uninit.");
 
-        let (idx, data) = (cell, self.data.data.as_ref());
+        let mut cells = Vec::new();
+        let cell = data.data.cell_idx(self.timestamp, interval.into());
+
+        let (idx, data) = (cell, data.data.as_ref());
 
         for cell in (&data[0..=usize::from(idx)]).iter().rev() {
             if !(n_cells > 0) {
@@ -433,7 +442,6 @@ pub(crate) fn module() -> Result<Module, ContextError> {
     module.function_meta(SingleRuneContext::partition_name__meta)?;
     module.function_meta(SingleRuneContext::pristine__meta)?;
     module.function_meta(SingleRuneContext::clear_misses__meta)?;
-    module.function_meta(SingleRuneContext::commit)?;
     module.function_meta(SingleRuneContext::write_metric)?;
     module.function_meta(SingleRuneContext::metric)?;
     module.function_meta(SingleRuneContext::write_custom)?;
