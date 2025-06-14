@@ -297,6 +297,7 @@ impl TimeseriesDatabase {
 
         Ok(Self {
             partitions: Arc::new(RwLock::new(partitions)),
+            #[cfg(feature = "backups")]
             backup_lock: Default::default(),
             meta_partition,
             keyspace,
