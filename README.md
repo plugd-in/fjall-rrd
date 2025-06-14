@@ -53,7 +53,7 @@ some logic missing.
 * [X] Finish implementing a complete WebAssembly interface.
 * [X] Finish implementing a complete Rune interface.
 * [ ] Implement logic to create backups of timeseries data.
-* [ ] Implement logic to ensure a stable data format,
+* [X] Implement logic to ensure a stable data format,
     or implement migration logic to ensure stability.
 * [ ] Create examples in Rune and Rust/WebAssembly.
 * [ ] Implement tests for the format and language
