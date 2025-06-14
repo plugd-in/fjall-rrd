@@ -7,7 +7,9 @@
 //!
 //! This project includes a `wit/` directory that documents
 //! the interface. Using a tool like
-//! [wit-bindgen](https://github.com/bytecodealliance/wit-bindgen).
+//! [wit-bindgen](https://github.com/bytecodealliance/wit-bindgen)
+//! you can turn the `WIT` file into bindings for your language
+//! of choice.
 
 use wasmtime_wasi::{
     ResourceTable,
