@@ -2,10 +2,33 @@
 Store timeseries data in a round-robin data structure, with customized
 insertion logic.
 
-## Screenshots
-![Rust implementation of the WebAssembly interface.](/images/rust-impl.png)
+## Collection Logic
+Metrics are intercepted by logic that can decide whether to insert
+the metric, decide to transform the metric before insertion,
+decide the rollup logic for different tiers, etc.
 
-# Stability
+### Supported Languages
+The following language integrations are supported:
+
+* WebAssembly Components (feature: `wasm`)
+* [Rune](https://github.com/rune-rs/rune) (feature: `rune`)
+
+The WebAssembly interface is documented in the [wit](/wit/fjall-rrd) files.
+Currently, the Rune integration is undocumented.
+
+### Screenshots
+![Rust implementation of the WebAssembly interface.](/images/rust-impl.png)
+![Rune implementation of a handler.](/images/rune-impl.png)
+
+
+## Data Layout
+Supports inserting into a single circular buffer or inserting
+into "tiers" of data. This allows you to do simple insertions after
+processing some type of metric, or it allows you to consolidate your
+data into lower tiers. One use of this is to implement a data
+retention policy that decreases the precision of data over time.
+
+## Stability
 The format of the data SHALL remain stable across and within versions.
 Any changes to the format SHALL be accompanied by automated migrations
 upon opening the database.
@@ -22,27 +45,6 @@ Changes to the existing public API (e.g. the `DataCell` type) will result
 in a major version bump, so long as those changes are not backward compatible.
 
 These version semantics will hold for versions including and following v0.1.0.
-
-## Data Layout
-Supports inserting into a single circular buffer or inserting
-into "tiers" of data. This allows you to do simple insertions after
-processing some type of metric, or it allows you to consolidate your
-data into lower tiers. One use of this is to implement a data
-retention policy that decreases the precision of data over time.
-
-## Collection Logic
-Metrics are intercepted by logic that can decide whether to insert
-the metric, decide to transform the metric before insertion,
-decide the rollup logic for different tiers, etc.
-
-### Supported Languages
-The following language integrations are supported:
-
-* WebAssembly Components (feature: `wasm`)
-* [Rune](https://github.com/rune-rs/rune) (feature: `rune`)
-
-The WebAssembly interface is documented in the [wit](/wit/fjall-rrd) files.
-Currently, the Rune integration is undocumented.
 
 ## Work in Progress
 This project is a work-in-progress. The interface needs some work and there's
