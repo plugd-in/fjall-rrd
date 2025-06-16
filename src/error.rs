@@ -31,7 +31,6 @@ pub enum TimeseriesError {
     WebAssembly(anyhow::Error),
     #[error("Required NonZeroU16, got 0.")]
     ZeroU16,
-    #[cfg(feature = "wasm")]
     #[error("Tried to execute WebAssembly component but the state is not initialized.")]
     StateUninit,
     #[error("Tried to open a new partition, but it already exists.")]
