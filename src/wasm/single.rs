@@ -10,7 +10,7 @@ use crate::{
     util::{TimeCell, TimeCellMut, timestamp_bucket},
 };
 use fjall::{Keyspace, Partition, PartitionCreateOptions, Slice};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use wasmtime::{
     Engine, Store,
     component::{Component, Linker, bindgen},
@@ -276,7 +276,7 @@ impl SingleImports for SingleComponent {
 #[derive(Clone)]
 struct PersistentSingleComponent {
     component: Arc<RwLock<Single>>,
-    store: Arc<RwLock<Store<WasiStateMaybeUninit<SingleComponent>>>>,
+    store: Arc<Mutex<Store<WasiStateMaybeUninit<SingleComponent>>>>,
 }
 
 impl From<(Single, Store<WasiStateMaybeUninit<SingleComponent>>)> for PersistentSingleComponent {
@@ -285,7 +285,7 @@ impl From<(Single, Store<WasiStateMaybeUninit<SingleComponent>>)> for Persistent
 
         Self {
             component: Arc::new(RwLock::new(component)),
-            store: Arc::new(RwLock::new(store)),
+            store: Arc::new(Mutex::new(store)),
         }
     }
 }
@@ -295,7 +295,7 @@ impl PersistentSingleComponent {
         let component = self.component.deref();
         let component = component.read();
         let store = self.store.deref();
-        let mut store = store.write();
+        let mut store = store.lock();
 
         {
             let maybe_state = store.data_mut();
@@ -427,7 +427,7 @@ impl SingleWasmPartition {
     where
         W: AsRef<[u8]>,
     {
-        let mut store = self.component.store.write();
+        let mut store = self.component.store.lock();
         let mut current_component = self.component.component.write();
 
         let compiled_component = Component::new(&self.engine, component.as_ref())

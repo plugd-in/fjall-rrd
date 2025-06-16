@@ -28,8 +28,6 @@ pub(crate) struct WasiStateMaybeUninit<T> {
     pub(crate) state: Option<T>,
 }
 
-unsafe impl <T: Sync> Sync for WasiStateMaybeUninit<T> {}
-
 impl<T> Default for WasiStateMaybeUninit<T> {
     fn default() -> Self {
         let wasi = WasiCtxBuilder::new()
