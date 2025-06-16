@@ -12,7 +12,7 @@ use crate::{
 
 use fjall::{Keyspace, Partition, PartitionCreateOptions, Slice};
 use itertools::Itertools;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use wasmtime::{
     Engine, Store,
     component::{Component, Linker, bindgen},
@@ -322,7 +322,7 @@ impl TieredImports for TieredComponent {
 
 struct LockedPersistentTieredComponent<'a> {
     component: RwLockReadGuard<'a, Tiered>,
-    store: RwLockWriteGuard<'a, Store<WasiStateMaybeUninit<TieredComponent>>>,
+    store: MutexGuard<'a, Store<WasiStateMaybeUninit<TieredComponent>>>,
 }
 
 impl<'a> LockedPersistentTieredComponent<'a> {
@@ -377,7 +377,7 @@ impl<'a> LockedPersistentTieredComponent<'a> {
 #[derive(Clone)]
 struct PersistentTieredComponent {
     component: Arc<RwLock<Tiered>>,
-    store: Arc<RwLock<Store<WasiStateMaybeUninit<TieredComponent>>>>,
+    store: Arc<Mutex<Store<WasiStateMaybeUninit<TieredComponent>>>>,
 }
 
 impl PersistentTieredComponent {
@@ -387,7 +387,7 @@ impl PersistentTieredComponent {
 
         LockedPersistentTieredComponent {
             component: component.read(),
-            store: store.write(),
+            store: store.lock(),
         }
     }
 }
@@ -398,7 +398,7 @@ impl From<(Tiered, Store<WasiStateMaybeUninit<TieredComponent>>)> for Persistent
 
         Self {
             component: Arc::new(RwLock::new(component)),
-            store: Arc::new(RwLock::new(store)),
+            store: Arc::new(Mutex::new(store)),
         }
     }
 }
@@ -508,7 +508,7 @@ impl TieredWasmPartition {
     where
         W: AsRef<[u8]>,
     {
-        let mut store = self.component.store.write();
+        let mut store = self.component.store.lock();
         let mut current_component = self.component.component.write();
 
         let compiled_component = Component::new(&self.engine, component.as_ref())
