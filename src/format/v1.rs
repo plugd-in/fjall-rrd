@@ -167,6 +167,8 @@ impl TryFrom<&Metadata> for Slice {
         let mut data = vec![FORMAT_VERSION];
 
         match value {
+            #[cfg(not(any(feature = "rune", feature = "wasm")))]
+            _ => return Err(TimeseriesError::LanguageDisabled("all")),
             #[cfg(feature = "rune")]
             Metadata::SingleRune(meta) => {
                 let name = "single_rune";
@@ -201,6 +203,7 @@ impl TryFrom<&Metadata> for Slice {
             }
         }
 
+        #[cfg_attr(not(any(feature = "rune", feature = "wasm")), allow(unreachable_code))]
         Ok(data.into())
     }
 }

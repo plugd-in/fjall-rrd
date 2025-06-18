@@ -74,6 +74,8 @@ impl TimeseriesPartition {
         K: AsRef<[u8]>,
     {
         match self {
+            #[cfg(not(any(feature = "rune", feature = "wasm")))]
+            _ => Err(TimeseriesError::LanguageDisabled("all")),
             #[cfg(feature = "rune")]
             Self::SingleRune(part) => part.insert_metric(key, metric),
             #[cfg(feature = "rune")]
